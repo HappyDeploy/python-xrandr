@@ -222,6 +222,15 @@ class Screen:
         xccr.restype = c_int
         return xccr(self._config)
 
+    def get_available_rates_for_size_index(self, size_index):
+        rates = []
+        nrates = c_int()
+        rr.XRRConfigRates.restype = POINTER(c_ushort*100)
+        _rates = rr.XRRConfigRates(self._config, size_index, byref(nrates))
+        for r in range(nrates.value):
+            rates.append(_rates.contents[r])
+        return rates
+
     def get_current_rotation(self):
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
