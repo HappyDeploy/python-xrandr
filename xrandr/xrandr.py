@@ -162,10 +162,6 @@ class Screen:
     def __del__(self):
         rr.XRRFreeScreenConfigInfo(self._config)
 
-    def get_timestamp():
-        timestamp = Time()
-        return rr.XRRTimes(self._display, self._id, byref(timestamp))
-
     def _load_config(self):
         class XRRScreenConfiguration(Structure):
             " private to Xrandr "
@@ -210,6 +206,11 @@ class Screen:
                                 self._resources.contents.outputs.contents[i])
             self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
                                                                self)
+    def get_timestamp(self):
+        config_timestamp = Time()
+        rr.XRRTimes.restpye = c_ulong
+        return rr.XRRTimes(self._display, self._id, byref(config_timestamp))
+
     def get_crtc_by_xid(self, xid):
         for crtc in self.crtcs:
             if crtc.xid == xid:
@@ -244,14 +245,14 @@ class Screen:
         core_sizes = xrs(self._config, byref(nsizes))
         return sizes
 
-#    def apply_changes(self):
-#        xlib.XGrabServer(self._display)#
-#	    res = XRRSetCrtcConfig(self._display, 
-#	                           self._resources, crtc->crtc.xid,
-#	                           get_timestamp(),
-#			                   0, 0, None, 0,
-#			                   rr_outputs, crtc->noutput);
- #       xlib.XUnGrabServer(self._display)
+    def set_config(self, size_index, rotation, rate):
+        status = rr.XRRSetScreenConfigAndRate(self._display,
+                                              self._config,
+                                              self._root,
+                                              size_index,
+                                              rotation,
+                                              rate,
+                                              self.get_timestamp())
 
     def print_info(self):
         print "Modes (%s):" % self._resources.contents.nmode
@@ -330,27 +331,4 @@ def get_version():
 #print "fb_width_mm: ",fb_width_mm
 #print "fb_height_mm: ",fb_height_mm
 #rr.XRRSetScreenSize(dpy, win, int(fb_width_mm), int(fb_height_mm))
-
-
-# XRRScreensize
-nsizes = c_int()
-xrs = rr.XRRSizes
-xrs.restype = POINTER(XRRScreenSize*100)
-screensizes = xrs(dpy, screen, byref(nsizes))
-print "XRRScreenSize: ", nsizes
-# no idea why this is needed, but when I use nsizes.value in range() it crashes
-the_sizes = nsizes.value
-for i in range(the_sizes):
-    print "%s: %s x %s (%s x %s) " % (i, screensizes.contents[i].width,
-                                  screensizes.contents[i].height,
-                                  screensizes.contents[i].mwidth,
-                                  screensizes.contents[i].mheight)
-
-
-# SetScreenConfigAndRate
-size_index = 0
-status = rr.XRRSetScreenConfigAndRate(dpy, xrrscreenconfiguration, win,
-                                      size_index, rotation, rate, timestamp)
-print status
-
 """
