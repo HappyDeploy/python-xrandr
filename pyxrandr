@@ -9,6 +9,7 @@ def main():
         raise
     screen = xrandr.get_current_screen()
     screen.print_info()
+    #screen.set_config(1, 1, 60)
 
 if __name__ == "__main__":
     main()

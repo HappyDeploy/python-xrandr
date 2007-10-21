@@ -40,7 +40,15 @@ class _XRRModeInfo(Structure):
         ("name", c_char_p),
         ("nameLength", c_int),
         ("modeFlags", c_long),
-]
+    ]
+
+class _XRRScreenSize(Structure):
+    _fields_ = [
+        ("width", c_int),
+        ("height", c_int),
+        ("mwidth", c_int),
+        ("mheight", c_int)
+    ]
 
 class _XRRCrtcInfo(Structure):
     _fields_ = [
@@ -94,6 +102,8 @@ class Output:
     def __init__(self, info, screen):
         self._info = info
         self._screen = screen
+    def __del__(self):
+        rr.XRRFreeOutputInfo(self._info)
     def get_physical_width(self):
         return self._info.contents.mm_width
     def get_physical_height(self):
@@ -124,6 +134,8 @@ class Crtc:
     def __init__(self, info, xid=None):
         self._info = info
         self.xid = xid
+    def __del__(self):
+        rr.XRRFreeCrtcConfigInfo(self._info)
     def set_xid(self, xid):
         self.xid = xid
     def get_xid(self):
@@ -147,9 +159,8 @@ class Screen:
         self._load_config()
         self._load_crtcs()
 
-    def get_timestamp():
-        timestamp = Time()
-        return rr.XRRTimes(self._display, self._id, byref(timestamp))
+    def __del__(self):
+        rr.XRRFreeScreenConfigInfo(self._config)
 
     def _load_config(self):
         class XRRScreenConfiguration(Structure):
@@ -158,7 +169,6 @@ class Screen:
         gsi = rr.XRRGetScreenInfo
         gsi.restype = POINTER(XRRScreenConfiguration)
         self._config = gsi(self._display, self._root)
-        #rr.XRRFreeScreenConfigInfo(self._config)        
         
     def _load_screen_size_range(self):
         minWidth = c_int()
@@ -196,8 +206,10 @@ class Screen:
                                 self._resources.contents.outputs.contents[i])
             self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
                                                                self)
-#    def free_resources(self):
-#        rr.XRRFreeOutputInfo(xrroutputinfo)
+    def get_timestamp(self):
+        config_timestamp = Time()
+        rr.XRRTimes.restpye = c_ulong
+        return rr.XRRTimes(self._display, self._id, byref(config_timestamp))
 
     def get_crtc_by_xid(self, xid):
         for crtc in self.crtcs:
@@ -205,15 +217,43 @@ class Screen:
                 return crtc
         return None
 
-#    def apply_changes(self):
-#        xlib.XGrabServer(self._display)#
-#	    res = XRRSetCrtcConfig(self._display, 
-#	                           self._resources, crtc->crtc.xid,
-#	                           get_timestamp(),
-#			                   0, 0, None, 0,
-#			                   rr_outputs, crtc->noutput);
- #       xlib.XUnGrabServer(self._display)
-                
+    def get_current_rate(self):
+        xccr = rr.XRRConfigCurrentRate
+        xccr.restype = c_int
+        return xccr(self._config)
+
+    def get_current_rotation(self):
+        current = c_ushort()
+        rotations = rr.XRRConfigRotations(self._config, byref(current))
+        return current.value
+
+    def get_available_rotations(self):
+        current = c_ushort()
+        rotations = rr.XRRConfigRotations(self._config, byref(current))
+        return rotations
+
+    def get_current_size_index(self):
+        rotation = c_ushort()
+        size = rr.XRRConfigCurrentConfiguration(self._config,
+                                                byref(rotation))
+        return size
+
+    def get_available_sizes(self):
+        nsizes = c_int()
+        xcs = rr.XRRConfigSizes
+        xcs.restype = POINTER(_XRRScreenSize*100)
+        core_sizes = xrs(self._config, byref(nsizes))
+        return sizes
+
+    def set_config(self, size_index, rotation, rate):
+        status = rr.XRRSetScreenConfigAndRate(self._display,
+                                              self._config,
+                                              self._root,
+                                              size_index,
+                                              rotation,
+                                              rate,
+                                              self.get_timestamp())
+
     def print_info(self):
         print "Modes (%s):" % self._resources.contents.nmode
         for i in range(self._resources.contents.nmode):
@@ -277,18 +317,6 @@ def get_version():
 
 """
 
-
-
-# XRRGetScreenInfo should not be used acording to the
-# c-header but I get a undefined symbol error when using XRRScreenConfig
-
-
-rate = rr.XRRConfigCurrentRate(xrrscreenconfiguration)
-print "Current refresh rate: ",rate
-
-print
-
-
 #FIXME: make this work somehow, the screen size changes
 #       with the resolution
 #print
@@ -303,43 +331,4 @@ print
 #print "fb_width_mm: ",fb_width_mm
 #print "fb_height_mm: ",fb_height_mm
 #rr.XRRSetScreenSize(dpy, win, int(fb_width_mm), int(fb_height_mm))
-
-
-# misc
-print
-print "current config_timestamp: ", config_timestamp
-
-current_rotation = Rotation()
-rotation = rr.XRRRotations(dpy, screen, byref(current_rotation))
-print "current rotation: ", current_rotation.value
-
-# XRRScreensize
-class XRRScreenSize(Structure):
-    _fields_ = [
-        ("width", c_int),
-        ("height", c_int),
-        ("mwidth", c_int),
-        ("mheight", c_int)
-    ]
-
-nsizes = c_int()
-xrs = rr.XRRSizes
-xrs.restype = POINTER(XRRScreenSize*100)
-screensizes = xrs(dpy, screen, byref(nsizes))
-print "XRRScreenSize: ", nsizes
-# no idea why this is needed, but when I use nsizes.value in range() it crashes
-the_sizes = nsizes.value
-for i in range(the_sizes):
-    print "%s: %s x %s (%s x %s) " % (i, screensizes.contents[i].width,
-                                  screensizes.contents[i].height,
-                                  screensizes.contents[i].mwidth,
-                                  screensizes.contents[i].mheight)
-
-
-# SetScreenConfigAndRate
-size_index = 0
-status = rr.XRRSetScreenConfigAndRate(dpy, xrrscreenconfiguration, win,
-                                      size_index, rotation, rate, timestamp)
-print status
-
 """
