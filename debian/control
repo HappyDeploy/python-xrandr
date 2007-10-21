@@ -1,0 +1,22 @@
+Source: python-xrandr
+Section: unknown
+Priority: extra
+Maintainer: Sebastian Heinlein <glatzor@ubuntu.com>
+Build-Depends: cdbs, 
+               debhelper (>= 5),
+	       python-all-dev,
+	       python-central (>= 0.5)
+XS-Python-Version: current
+XS-Vcs-Bzr: http://bazaar.launchpad.net/~displayconfig-gtk/python-xrandr/main
+Standards-Version: 3.7.2
+
+Package: python-xrandr
+Architecture: all
+Depends: ${python:Depends},
+	 libx11-6, 
+	 libxrandr2
+XB-Python-Version: ${python:Versions}
+Description: allows to configure your x server on the fly
+ Python-xrandr provides bindings to the RandR extension of the Xorg server.
+ With RandR you can configure the resolution, refresh rate and multiple
+ monitors on the fly.
