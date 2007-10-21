@@ -253,7 +253,7 @@ def get_current_screen():
     screen = Screen(get_current_display())
     return screen
 
-def has_xrandr_extension():
+def has_extension():
     """ Returns true if the randr extension is available """
     # query ext
     a = c_int()
@@ -261,10 +261,10 @@ def has_xrandr_extension():
     res = rr.XRRQueryExtension(get_current_display(), byref(a), byref(b))
     return res
 
-def get_xrandr_version():
+def get_version():
     """ Returns a tuple containing the major and minor version of the xrandr
         extension """
-    if has_xrandr_extension():
+    if has_extension():
         # check version
         major = c_int()
         minor = c_int()
@@ -275,17 +275,6 @@ def get_xrandr_version():
         else:
             return None
 
-def main():
-    if has_xrandr_extension():
-        print "XRandR (%s.%s)" % get_xrandr_version()
-    else:
-        raise
-    screen = get_current_screen()
-    screen.print_info()
-    
-if __name__ == "__main__":
-    main()    
-        
 """
 
 

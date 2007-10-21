@@ -6,6 +6,7 @@ setup(name="python-xrandr",
       description="Python bindings for XRandR",
       author="Michael Vogt, Sebastian Heinlein",
       packages=['xrandr'],
+      scripts=['pyxrandr'],
       license = 'GNU LGPL',
       platforms = 'posix')
 

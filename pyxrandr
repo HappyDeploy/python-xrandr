@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+
+from xrandr import xrandr
+
+def main():
+    if xrandr.has_extension():
+        print "XRandR (%s.%s)" % xrandr.get_version()
+    else:
+        raise
+    screen = xrandr.get_current_screen()
+    screen.print_info()
+
+if __name__ == "__main__":
+    main()
+
