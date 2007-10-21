@@ -1,0 +1,28 @@
+Python-xrandr provides so called bindings for the xrandr extenstion of X.org,
+the graphical base system found in most Linux and Unix systems. It is written
+as a subproject of displayconfig-gtk and guidance, both graphical tools to
+configure your screens and graphics.
+
+Xrandr allows you to set the resolution and refresh rate of your monitor on the
+fly. In the latest version 1.2 you can even configure multiple monitors 
+instantly by merging or cloning monitors.
+
+Currently only a small number of these capabilites are supported by 
+python-xrandr.
+
+The included command line tool pyxrandr shows you the detected information of 
+your system.
+
+Help on this project is always welcome. Feel free to contact us for questions
+or comments.
+
+The project is registered at Launchpad.net, a free (not as in beer) service 
+infrastructure for Open Source software development hosted by Canonical, Ltd.
+
+Errors (bugs) and problems can be reported here:
+
+https://www.launchpad.net/python-xrandr/
+
+Cheers,
+
+Sebastian Heinlein, from the displayconfig-gtk team
