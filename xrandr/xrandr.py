@@ -40,7 +40,7 @@ class _XRRModeInfo(Structure):
         ("name", c_char_p),
         ("nameLength", c_int),
         ("modeFlags", c_long),
-    ]
+        ]
 
 class _XRRScreenSize(Structure):
     _fields_ = [
@@ -48,7 +48,7 @@ class _XRRScreenSize(Structure):
         ("height", c_int),
         ("mwidth", c_int),
         ("mheight", c_int)
-    ]
+        ]
 
 class _XRRCrtcInfo(Structure):
     _fields_ = [
@@ -64,7 +64,7 @@ class _XRRCrtcInfo(Structure):
         ("rotations", POINTER(Rotation*100)),
         ("npossible", c_int),
         ("possible", POINTER(RROutput*100)),
-    ]
+        ]
     
 class _XRRScreenResources(Structure):
     _fields_ = [
@@ -76,7 +76,7 @@ class _XRRScreenResources(Structure):
         ("outputs", POINTER(RROutput*100)),
         ("nmode", c_int),
         ("modes", POINTER(_XRRModeInfo*100)), # number needs just to be big
-]
+        ]
 
 # XRRGetOutputInfo
 class _XRROutputInfo(Structure):
@@ -96,7 +96,21 @@ class _XRROutputInfo(Structure):
         ("nmode", c_int),
         ("npreferred", c_int),
         ("modes", POINTER(RRMode*100))
-    ]
+        ]
+
+class _XRRCrtcGamma(Structure):
+    _fields_ = [
+        ('size', c_int),
+        ('red', POINTER(c_ushort)),
+        ('green', POINTER(c_ushort)),
+        ('blue', POINTER(c_ushort)),
+        ]
+
+def _array_conv(array, type, conv = lambda x:x):
+    res = type * len(array)
+    for i in array:
+        res[i] = conv(array[i])
+    return res
 
 class Output:
     def __init__(self, info, screen):
@@ -131,17 +145,36 @@ class Output:
         return self._info.contents.crtc != 0
 
 class Crtc:
-    def __init__(self, info, xid=None):
+    def __init__(self, info, xid, screen):
         self._info = info
         self.xid = xid
+        self._screen = screen
     def __del__(self):
         rr.XRRFreeCrtcConfigInfo(self._info)
-    def set_xid(self, xid):
-        self.xid = xid
     def get_xid(self):
         return self.xid
     def get_available_rotations(self):
         return self._info.contents.rotations
+    def set_config(self, x, y, mode, outputs):
+        rr.XRRSetCrtcConfig(self._screen._display,
+                            self._screen._resources,
+                            self.xid,
+                            self._screen.get_timestamp(),
+                            x, y,
+                            mode._id,
+                            _array_conv(outputs, _c.c_ulong, lambda x: x._id),
+                            len(outputs))
+
+    def get_gamma_size(self):
+        return rr.XRRGetCrtcGammaSize(self._screen._display, self.id)
+    def get_gamma(self):
+        result = rr.XRRGetCrtcGamma(self._screen._display, self.id)
+        return _from_gamma(result)
+    def set_gamma(self, gamma):
+        g = _to_gamma(gamma)
+        rr.XRRSetCrtcGamma(self._screen._display, self.id, g)
+        rr.XRRFreeGamma(g)
+    gamma = property(get_gamma, set_gamma)
 
 class Screen:
     def __init__(self, dpy):
@@ -196,7 +229,8 @@ class Screen:
             xrrcrtcinfo = gci(self._display, self._resources,
                               self._resources.contents.crtcs.contents[i])
             self.crtcs.append(Crtc(xrrcrtcinfo,
-                              self._resources.contents.crtcs.contents[i]))
+                              self._resources.contents.crtcs.contents[i],
+                              self)
 
     def _load_outputs(self):
         for i in range(self._resources.contents.noutput):
@@ -323,6 +357,23 @@ def get_version():
             return (major.value, minor.value)
         else:
             return None
+
+def _to_gamma(gamma):
+    g = rr.XRRAllocGamma(len(gamma[0]))
+    for i in range(gamma[0]):
+        g.red[i] = gamma[0][i]
+        g.green[i] = gamma[1][i]
+        g.blue[i] = gamma[2][i]
+    return g
+
+def _from_gamma(g):
+    gamma = ([], [], [])
+    for i in range(g.size):
+        gamma[0].append(g.red[i])
+        gamma[1].append(g.green[i])
+        gamma[2].append(g.blue[i])
+    rr.XRRFreeGamma(g)
+
 
 """
 
