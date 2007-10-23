@@ -31,8 +31,4 @@ for crtc in output.get_crtcs():
 
 
 # diabling works too
-#for crtc in screen.crtcs:
-#    for crtc_output in crtc.outputs:
-#        if crtc_output == output:
-#            print "disabling: %s" % output.id
-#            crtc.disable()
+#screen.get_crtc_by_xid(output.get_crtc()).disable()
