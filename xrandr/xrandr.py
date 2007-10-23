@@ -40,7 +40,7 @@ class _XRRModeInfo(Structure):
         ("name", c_char_p),
         ("nameLength", c_int),
         ("modeFlags", c_long),
-    ]
+        ]
 
 class _XRRScreenSize(Structure):
     _fields_ = [
@@ -48,7 +48,7 @@ class _XRRScreenSize(Structure):
         ("height", c_int),
         ("mwidth", c_int),
         ("mheight", c_int)
-    ]
+        ]
 
 class _XRRCrtcInfo(Structure):
     _fields_ = [
@@ -64,7 +64,7 @@ class _XRRCrtcInfo(Structure):
         ("rotations", POINTER(Rotation*100)),
         ("npossible", c_int),
         ("possible", POINTER(RROutput*100)),
-    ]
+        ]
     
 class _XRRScreenResources(Structure):
     _fields_ = [
@@ -76,7 +76,12 @@ class _XRRScreenResources(Structure):
         ("outputs", POINTER(RROutput*100)),
         ("nmode", c_int),
         ("modes", POINTER(_XRRModeInfo*100)), # number needs just to be big
-]
+        ]
+
+class ExtensionMissingException(Exception):
+    pass
+class UnsupportedException(Exception):
+    pass
 
 # XRRGetOutputInfo
 class _XRROutputInfo(Structure):
@@ -96,7 +101,21 @@ class _XRROutputInfo(Structure):
         ("nmode", c_int),
         ("npreferred", c_int),
         ("modes", POINTER(RRMode*100))
-    ]
+        ]
+
+class _XRRCrtcGamma(Structure):
+    _fields_ = [
+        ('size', c_int),
+        ('red', POINTER(c_ushort)),
+        ('green', POINTER(c_ushort)),
+        ('blue', POINTER(c_ushort)),
+        ]
+
+def _array_conv(array, type, conv = lambda x:x):
+    res = type * len(array)
+    for i in array:
+        res[i] = conv(array[i])
+    return res
 
 class Output:
     def __init__(self, info, screen):
@@ -131,17 +150,36 @@ class Output:
         return self._info.contents.crtc != 0
 
 class Crtc:
-    def __init__(self, info, xid=None):
+    def __init__(self, info, xid, screen):
         self._info = info
         self.xid = xid
+        self._screen = screen
     def __del__(self):
         rr.XRRFreeCrtcConfigInfo(self._info)
-    def set_xid(self, xid):
-        self.xid = xid
     def get_xid(self):
         return self.xid
     def get_available_rotations(self):
         return self._info.contents.rotations
+    def set_config(self, x, y, mode, outputs):
+        rr.XRRSetCrtcConfig(self._screen._display,
+                            self._screen._resources,
+                            self.xid,
+                            self._screen.get_timestamp(),
+                            x, y,
+                            mode._id,
+                            _array_conv(outputs, _c.c_ulong, lambda x: x._id),
+                            len(outputs))
+
+    def get_gamma_size(self):
+        return rr.XRRGetCrtcGammaSize(self._screen._display, self.id)
+    def get_gamma(self):
+        result = rr.XRRGetCrtcGamma(self._screen._display, self.id)
+        return _from_gamma(result)
+    def set_gamma(self, gamma):
+        g = _to_gamma(gamma)
+        rr.XRRSetCrtcGamma(self._screen._display, self.id, g)
+        rr.XRRFreeGamma(g)
+    gamma = property(get_gamma, set_gamma)
 
 class Screen:
     def __init__(self, dpy):
@@ -155,9 +193,10 @@ class Screen:
         
         self._load_screen_size_range()
         self._load_resources()
-        self._load_outputs()
         self._load_config()
-        self._load_crtcs()
+        if XRANDR_VERSION >= (1,2):
+            self._load_outputs()
+            self._load_crtcs()
 
     def __del__(self):
         rr.XRRFreeScreenConfigInfo(self._config)
@@ -196,7 +235,8 @@ class Screen:
             xrrcrtcinfo = gci(self._display, self._resources,
                               self._resources.contents.crtcs.contents[i])
             self.crtcs.append(Crtc(xrrcrtcinfo,
-                              self._resources.contents.crtcs.contents[i]))
+                              self._resources.contents.crtcs.contents[i],
+                              self))
 
     def _load_outputs(self):
         for i in range(self._resources.contents.noutput):
@@ -218,11 +258,13 @@ class Screen:
         return None
 
     def get_current_rate(self):
+        _check_required_version((1,0))
         xccr = rr.XRRConfigCurrentRate
         xccr.restype = c_int
         return xccr(self._config)
 
     def get_available_rates_for_size_index(self, size_index):
+        _check_required_version((1,0))
         rates = []
         nrates = c_int()
         rr.XRRConfigRates.restype = POINTER(c_ushort*100)
@@ -232,22 +274,26 @@ class Screen:
         return rates
 
     def get_current_rotation(self):
+        _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return current.value
 
     def get_available_rotations(self):
+        _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return rotations
 
     def get_current_size_index(self):
+        _check_required_version((1,0))
         rotation = c_ushort()
         size = rr.XRRConfigCurrentConfiguration(self._config,
                                                 byref(rotation))
         return size
 
     def get_available_sizes(self):
+        _check_required_version((1,0))
         nsizes = c_int()
         xcs = rr.XRRConfigSizes
         xcs.restype = POINTER(_XRRScreenSize*100)
@@ -255,6 +301,7 @@ class Screen:
         return sizes
 
     def set_config(self, size_index, rotation, rate):
+        _check_required_version((1,0))
         status = rr.XRRSetScreenConfigAndRate(self._display,
                                               self._config,
                                               self._root,
@@ -264,6 +311,7 @@ class Screen:
                                               self.get_timestamp())
 
     def print_info(self):
+        _check_required_version((1,0))
         print "Modes (%s):" % self._resources.contents.nmode
         for i in range(self._resources.contents.nmode):
             print "  %s - %s %s" % (
@@ -292,6 +340,10 @@ class Screen:
             #for (f,t) in output._info.contents._fields_:
             #    print "%s %s" % (f, getattr(output._info.contents, f))
 
+    def get_outputs(self):
+        _check_required_version((1,2))
+        return self.outputs
+
 
 def get_current_display():
     display_url = os.getenv("DISPLAY")
@@ -302,27 +354,45 @@ def get_current_screen():
     screen = Screen(get_current_display())
     return screen
 
-def has_extension():
-    """ Returns true if the randr extension is available """
-    # query ext
-    a = c_int()
-    b = c_int()
-    res = rr.XRRQueryExtension(get_current_display(), byref(a), byref(b))
-    return res
-
 def get_version():
     """ Returns a tuple containing the major and minor version of the xrandr
         extension """
-    if has_extension():
-        # check version
-        major = c_int()
-        minor = c_int()
-        res = rr.XRRQueryVersion(get_current_display(),
-                                 byref(major), byref(minor))
-        if res:
-            return (major.value, minor.value)
-        else:
-            return None
+    major = c_int()
+    minor = c_int()
+    res = rr.XRRQueryVersion(get_current_display(),
+                             byref(major), byref(minor))
+    if res:
+        return (major.value, minor.value)
+    return None
+
+def has_extension():
+    if XRANDR_VERSION:
+        return True
+    return False
+
+def _to_gamma(gamma):
+    g = rr.XRRAllocGamma(len(gamma[0]))
+    for i in range(gamma[0]):
+        g.red[i] = gamma[0][i]
+        g.green[i] = gamma[1][i]
+        g.blue[i] = gamma[2][i]
+    return g
+
+def _from_gamma(g):
+    gamma = ([], [], [])
+    for i in range(g.size):
+        gamma[0].append(g.red[i])
+        gamma[1].append(g.green[i])
+        gamma[2].append(g.blue[i])
+    rr.XRRFreeGamma(g)
+
+def _check_required_version(version):
+    if XRANDR_VERSION == None:
+        raise ExtensionMissingException
+    elif XRANDR_VERSION < version:
+        raise UnsupportedException
+
+XRANDR_VERSION = get_version()
 
 """
 
