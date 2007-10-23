@@ -363,7 +363,12 @@ def get_version():
                              byref(major), byref(minor))
     if res:
         return (major.value, minor.value)
-    raise ExtensionMissingException
+    return None
+
+def has_extension(self):
+    if XRANDR_VERSION:
+        return True
+    return False
 
 def _to_gamma(gamma):
     g = rr.XRRAllocGamma(len(gamma[0]))
@@ -382,7 +387,9 @@ def _from_gamma(g):
     rr.XRRFreeGamma(g)
 
 def _check_required_version(version):
-    if XRANDR_VERSION < version:
+    if XRANDR_VERSION == None:
+        raise ExtensionMissingException
+    elif XRANDR_VERSION < version:
         raise UnsupportedException
 
 XRANDR_VERSION = get_version()
