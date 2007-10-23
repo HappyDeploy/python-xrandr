@@ -365,7 +365,7 @@ def get_version():
         return (major.value, minor.value)
     return None
 
-def has_extension(self):
+def has_extension():
     if XRANDR_VERSION:
         return True
     return False
