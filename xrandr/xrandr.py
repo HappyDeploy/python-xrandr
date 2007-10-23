@@ -156,6 +156,10 @@ class Output:
         return self._info.contents.npreferred
     def is_active(self):
         return self._info.contents.crtc != 0
+    def disable(self):
+        if not self.is_active():
+            return False
+        self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
 class Crtc:
     def __init__(self, info, xid, screen):
@@ -340,6 +344,13 @@ class Screen:
                                               rotation,
                                               rate,
                                               self.get_timestamp())
+
+    def get_output_by_name(self, name):
+        if self.outputs.has_key(name):
+            return self.outputs[name]
+        else:
+            return None
+
     def get_output_by_id(self, id):
         for o in self.outputs.values():
             if o.id == id:
