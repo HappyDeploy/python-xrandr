@@ -78,6 +78,11 @@ class _XRRScreenResources(Structure):
         ("modes", POINTER(_XRRModeInfo*100)), # number needs just to be big
         ]
 
+class ExtensionMissingException(Exception):
+    pass
+class UnsupportedException(Exception):
+    pass
+
 # XRRGetOutputInfo
 class _XRROutputInfo(Structure):
     _fields_ = [
@@ -188,9 +193,10 @@ class Screen:
         
         self._load_screen_size_range()
         self._load_resources()
-        self._load_outputs()
         self._load_config()
-        self._load_crtcs()
+        if XRANDR_VERSION >= (1,2):
+            self._load_outputs()
+            self._load_crtcs()
 
     def __del__(self):
         rr.XRRFreeScreenConfigInfo(self._config)
@@ -230,7 +236,7 @@ class Screen:
                               self._resources.contents.crtcs.contents[i])
             self.crtcs.append(Crtc(xrrcrtcinfo,
                               self._resources.contents.crtcs.contents[i],
-                              self)
+                              self))
 
     def _load_outputs(self):
         for i in range(self._resources.contents.noutput):
@@ -252,11 +258,13 @@ class Screen:
         return None
 
     def get_current_rate(self):
+        _check_required_version((1,0))
         xccr = rr.XRRConfigCurrentRate
         xccr.restype = c_int
         return xccr(self._config)
 
     def get_available_rates_for_size_index(self, size_index):
+        _check_required_version((1,0))
         rates = []
         nrates = c_int()
         rr.XRRConfigRates.restype = POINTER(c_ushort*100)
@@ -266,22 +274,26 @@ class Screen:
         return rates
 
     def get_current_rotation(self):
+        _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return current.value
 
     def get_available_rotations(self):
+        _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return rotations
 
     def get_current_size_index(self):
+        _check_required_version((1,0))
         rotation = c_ushort()
         size = rr.XRRConfigCurrentConfiguration(self._config,
                                                 byref(rotation))
         return size
 
     def get_available_sizes(self):
+        _check_required_version((1,0))
         nsizes = c_int()
         xcs = rr.XRRConfigSizes
         xcs.restype = POINTER(_XRRScreenSize*100)
@@ -289,6 +301,7 @@ class Screen:
         return sizes
 
     def set_config(self, size_index, rotation, rate):
+        _check_required_version((1,0))
         status = rr.XRRSetScreenConfigAndRate(self._display,
                                               self._config,
                                               self._root,
@@ -298,6 +311,7 @@ class Screen:
                                               self.get_timestamp())
 
     def print_info(self):
+        _check_required_version((1,0))
         print "Modes (%s):" % self._resources.contents.nmode
         for i in range(self._resources.contents.nmode):
             print "  %s - %s %s" % (
@@ -326,6 +340,10 @@ class Screen:
             #for (f,t) in output._info.contents._fields_:
             #    print "%s %s" % (f, getattr(output._info.contents, f))
 
+    def get_outputs(self):
+        _check_required_version((1,2))
+        return self.outputs
+
 
 def get_current_display():
     display_url = os.getenv("DISPLAY")
@@ -336,27 +354,16 @@ def get_current_screen():
     screen = Screen(get_current_display())
     return screen
 
-def has_extension():
-    """ Returns true if the randr extension is available """
-    # query ext
-    a = c_int()
-    b = c_int()
-    res = rr.XRRQueryExtension(get_current_display(), byref(a), byref(b))
-    return res
-
 def get_version():
     """ Returns a tuple containing the major and minor version of the xrandr
         extension """
-    if has_extension():
-        # check version
-        major = c_int()
-        minor = c_int()
-        res = rr.XRRQueryVersion(get_current_display(),
-                                 byref(major), byref(minor))
-        if res:
-            return (major.value, minor.value)
-        else:
-            return None
+    major = c_int()
+    minor = c_int()
+    res = rr.XRRQueryVersion(get_current_display(),
+                             byref(major), byref(minor))
+    if res:
+        return (major.value, minor.value)
+    raise ExtensionMissingException
 
 def _to_gamma(gamma):
     g = rr.XRRAllocGamma(len(gamma[0]))
@@ -374,6 +381,11 @@ def _from_gamma(g):
         gamma[2].append(g.blue[i])
     rr.XRRFreeGamma(g)
 
+def _check_required_version(version):
+    if XRANDR_VERSION < version:
+        raise UnsupportedException
+
+XRANDR_VERSION = get_version()
 
 """
 
