@@ -29,6 +29,15 @@ def main():
                       help=_("rotate the screen. supported values are "
                              "normal, left, inverted, right or 0, 90, 180, "
                              "270"))
+    parser.add_option("--output", "",
+                      default=None,
+                      action="store", type="string", dest="output",
+                      #TRANSLATORS: command line option
+                      help=_("select an available output"))
+    parser.add_option("--disable", "",
+                      action="store_true", dest="output_disable",
+                      #TRANSLATORS: command line option
+                      help=_("disable the selected output"))
     (options, args) = parser.parse_args()
 
     if xrandr.has_extension():
@@ -63,6 +72,13 @@ def main():
             print _("Invalid orientation")
             sys.exit(1)
         screen.set_config(options.size, rotation, cur_rate)
+    elif options.output:
+        output = screen.get_output_by_name(options.output)
+        if not output:
+            print _("Output does not exist")
+            sys.exit(1)
+        if options.output_disable:
+            output.disable()
     else:
         screen.print_info()
     screen.get_available_rates_for_size_index(1)
