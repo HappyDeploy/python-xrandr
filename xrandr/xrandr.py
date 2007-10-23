@@ -57,7 +57,7 @@ class _XRRCrtcInfo(Structure):
         ("y", c_int),
         ("width", c_int),
         ("height", c_int),
-        ("mode", POINTER(RRMode*100)),
+        ("mode", RRMode),
         ("rotation", c_int),
         ("noutput", c_int),
         ("outputs", POINTER(RROutput*100)),
@@ -118,8 +118,9 @@ def _array_conv(array, type, conv = lambda x:x):
     return res
 
 class Output:
-    def __init__(self, info, screen):
+    def __init__(self, info, id, screen):
         self._info = info
+        self.id = id
         self._screen = screen
     def __del__(self):
         rr.XRRFreeOutputInfo(self._info)
@@ -129,6 +130,13 @@ class Output:
         return self._info.contents.mm_height
     def get_crtc(self):
         return self._info.contents.crtc
+    def get_crtcs(self):
+        crtcs = []
+        for i in range(self._info.contents.ncrtc):
+            for crtc in self._screen.crtcs:
+                if crtc.xid == self._info.contents.crtcs.contents[i]:
+                    crtcs.append(crtc)
+        return crtcs
     def get_available_rotations(self):
         if self.is_active():
             crtc = self._screen.get_crtc_by_xid(self._info.contents.crtc)
@@ -161,15 +169,29 @@ class Crtc:
     def get_available_rotations(self):
         return self._info.contents.rotations
     def set_config(self, x, y, mode, outputs):
+        # FIXME: this is nasty, but I don't know how to build a 
+        #        dynamic array with just ctypes (it does not let
+        #        me assign dynamic values)
+        c_outputs_type = RROutput*1
+        c_outputs = c_outputs_type(outputs[0].id)
+        #for o in outputs:
+        #    c_outputs[i] = o.id
+        #    i += 1
         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
                             self.xid,
                             self._screen.get_timestamp(),
                             x, y,
-                            mode._id,
-                            _array_conv(outputs, _c.c_ulong, lambda x: x._id),
-                            len(outputs))
-
+                            mode.id,
+                            RR_ROTATE_0,
+                            byref(c_outputs),
+                            len(c_outputs))
+    def disable(self):
+        rr.XRRSetCrtcConfig(self._screen._display,
+                            self._screen._resources,
+                            self.xid,
+                            self._screen.get_timestamp(),
+                            0, 0, 0, RR_ROTATE_0, 0, 0)
     def get_gamma_size(self):
         return rr.XRRGetCrtcGammaSize(self._screen._display, self.id)
     def get_gamma(self):
@@ -180,6 +202,14 @@ class Crtc:
         rr.XRRSetCrtcGamma(self._screen._display, self.id, g)
         rr.XRRFreeGamma(g)
     gamma = property(get_gamma, set_gamma)
+    @property
+    def outputs(self):
+        outputs = []
+        for i in range(self._info.contents.noutput):
+            id = self._info.contents.outputs.contents[i]
+            o = self._screen.get_output_by_id(id)
+            outputs.append(o)
+        return outputs
 
 class Screen:
     def __init__(self, dpy):
@@ -242,9 +272,10 @@ class Screen:
         for i in range(self._resources.contents.noutput):
             goi = rr.XRRGetOutputInfo
             goi.restype = POINTER(_XRROutputInfo)
-            xrroutputinfo = goi(self._display, self._resources,
-                                self._resources.contents.outputs.contents[i])
+            id = self._resources.contents.outputs.contents[i]
+            xrroutputinfo = goi(self._display, self._resources, id)
             self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
+                                                               id,
                                                                self)
     def get_timestamp(self):
         config_timestamp = Time()
@@ -309,6 +340,11 @@ class Screen:
                                               rotation,
                                               rate,
                                               self.get_timestamp())
+    def get_output_by_id(self, id):
+        for o in self.outputs.values():
+            if o.id == id:
+                return o
+        return None
 
     def print_info(self):
         _check_required_version((1,0))
