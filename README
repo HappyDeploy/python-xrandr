@@ -7,11 +7,11 @@ Xrandr allows you to set the resolution and refresh rate of your monitor on the
 fly. In the latest version 1.2 you can even configure multiple monitors 
 instantly by merging or cloning monitors.
 
-Currently only a small number of these capabilites are supported by 
-python-xrandr.
+Currently only a subset of these capabilites are supported by python-xrandr.
 
-The included command line tool pyxrandr shows you the detected information of 
-your system.
+The included command line tool pyxrandr shows you the detected devices and 
+allows you to change the resolution, refresh rate and orientation or to 
+disable an output.
 
 Help on this project is always welcome. Feel free to contact us for questions
 or comments.
@@ -19,7 +19,7 @@ or comments.
 The project is registered at Launchpad.net, a free (not as in beer) service 
 infrastructure for Open Source software development hosted by Canonical, Ltd.
 
-Errors (bugs) and problems can be reported here:
+Errors (so called bugs) and problems can be reported here:
 
 https://www.launchpad.net/python-xrandr/
 
