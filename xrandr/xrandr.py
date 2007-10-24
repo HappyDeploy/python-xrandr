@@ -126,32 +126,52 @@ def _array_conv(array, type, conv = lambda x:x):
     return res
 
 class Output:
+    """The output is a reference to a supported output jacket of the graphics
+       card. Outputs are attached to a hardware pipe to be used. Furthermore
+       they can be a clone of another output or show a subset of the screen"""
     def __init__(self, info, id, screen):
+        """Initializes an output instance"""
         self._info = info
         self.id = id
         self._screen = screen
     def __del__(self):
+        """Frees the internal reference to the output info if the output gets
+           removed"""
         rr.XRRFreeOutputInfo(self._info)
     def get_physical_width(self):
+        """Returns the display width reported by the connected output device"""
         return self._info.contents.mm_width
     def get_physical_height(self):
+        """Returns the display height reported by the connected output device"""
         return self._info.contents.mm_height
     def get_crtc(self):
+        """Returns the xid of the hardware pipe to which the the output is
+           attached. If the output is disabled it will return 0"""
         return self._info.contents.crtc
     def get_crtcs(self):
+        """Returns the xids of the hardware pipes to which the output could
+           be attached"""
         crtcs = []
         for i in range(self._info.contents.ncrtc):
             for crtc in self._screen.crtcs:
                 if crtc.xid == self._info.contents.crtcs.contents[i]:
                     crtcs.append(crtc)
         return crtcs
+
     def get_available_rotations(self):
+        """Returns a binary flag of the supported rotations of the output or
+           0 if the output is disabled"""
         if self.is_active():
+            # Query the supported hardware rotations of the attached
+            # hardware pipe
             crtc = self._screen.get_crtc_by_xid(self._info.contents.crtc)
             return crtc.get_available_rotations()
         else:
-            return None
+            return 0
+
     def get_available_modes(self):
+        """Returns the list of supported mode lines (resolution, refresh rate)
+           that are supported by the connected device"""
         modes = []
         for m in range(self._info.contents.nmode):
             output_mode = self._info.contents.modes.contents[m]
@@ -160,27 +180,45 @@ class Output:
                 if screen_mode.id == output_mode:
                     modes.append(screen_mode)
         return modes
+
     def get_preferred_mode(self):
+        """Returns an index that refers to the list of available modes and 
+           points to the preferred mode of the connected device"""
         return self._info.contents.npreferred
+
     def is_active(self):
+        """Returns True if the output is attached to a hardware pipe, is
+           enabled"""
         return self._info.contents.crtc != 0
+
     def disable(self):
+        """Disables the output"""
         if not self.is_active():
             return False
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
 class Crtc:
+    """The crtc is a reference to a hardware pipe that is provided by the
+       graphics device. Outputs can be attached to crtcs"""
     def __init__(self, info, xid, screen):
+        """Initializes the hardware pipe object"""
         self._info = info
         self.xid = xid
         self._screen = screen
     def __del__(self):
+        """Free the reference to the hardware pipe if the instance gets 
+           removed"""
         rr.XRRFreeCrtcConfigInfo(self._info)
     def get_xid(self):
+        """Returns the internal id of the crtc from the X server"""
         return self.xid
     def get_available_rotations(self):
+        """Returns a binary flag that contains the supported rotations of the
+           hardware pipe"""
         return self._info.contents.rotations
     def set_config(self, x, y, mode, outputs):
+        """Configure the hardware pipe with the given mode and outputs. X and y
+           set the position of the crtc output in the screen"""
         # FIXME: this is nasty, but I don't know how to build a 
         #        dynamic array with just ctypes (it does not let
         #        me assign dynamic values)
@@ -225,6 +263,7 @@ class Crtc:
 
 class Screen:
     def __init__(self, dpy):
+        """Initializes the screen"""
         self.outputs = {}
         self.crtcs = []
 
@@ -241,9 +280,13 @@ class Screen:
             self._load_crtcs()
 
     def __del__(self):
+        """Free the reference to the interal screen config if the screen
+           gets removed"""
         rr.XRRFreeScreenConfigInfo(self._config)
 
     def _load_config(self):
+        """Loads the screen configuration. Only needed privately by the
+           the bindings"""
         class XRRScreenConfiguration(Structure):
             " private to Xrandr "
             pass
@@ -252,6 +295,7 @@ class Screen:
         self._config = gsi(self._display, self._root)
         
     def _load_screen_size_range(self):
+        """Detects the dimensionios of the screen"""
         minWidth = c_int()
         minHeight = c_int()
         maxWidth = c_int()
@@ -266,11 +310,15 @@ class Screen:
             self.min_height = minHeight.value
 
     def _load_resources(self):
+        """Loads the screen resources. Only needed privately for the 
+           bindings"""
         gsr = rr.XRRGetScreenResources
         gsr.restype = POINTER(_XRRScreenResources)
         self._resources = gsr(self._display, self._root)
 
     def _load_crtcs(self):
+        """Loads the available XRandR 1.2 crtcs (hardware pipes) of
+           the screen"""
         for i in range(self._resources.contents.ncrtc):
             gci = rr.XRRGetCrtcInfo
             gci.restype = POINTER(_XRRCrtcInfo)
@@ -281,6 +329,7 @@ class Screen:
                               self))
 
     def _load_outputs(self):
+        """Loads the available XRandR 1.2 outputs of the screen"""
         for i in range(self._resources.contents.noutput):
             goi = rr.XRRGetOutputInfo
             goi.restype = POINTER(_XRROutputInfo)
@@ -290,23 +339,30 @@ class Screen:
                                                                id,
                                                                self)
     def get_timestamp(self):
+        """Creates a X timestamp that must be used when applying changes, since
+           they can be delayed"""
         config_timestamp = Time()
         rr.XRRTimes.restpye = c_ulong
         return rr.XRRTimes(self._display, self._id, byref(config_timestamp))
 
     def get_crtc_by_xid(self, xid):
+        """Returns the crtc with the given xid or None"""
         for crtc in self.crtcs:
             if crtc.xid == xid:
                 return crtc
         return None
 
     def get_current_rate(self):
+        """Returns the currently used refresh rate"""
         _check_required_version((1,0))
         xccr = rr.XRRConfigCurrentRate
         xccr.restype = c_int
         return xccr(self._config)
 
     def get_available_rates_for_size_index(self, size_index):
+        """Returns the refresh rates that are supported by the screen for
+           the given resolution. See get_available_sizes for the resolution to
+           which size_index points"""
         _check_required_version((1,0))
         rates = []
         nrates = c_int()
@@ -317,18 +373,23 @@ class Screen:
         return rates
 
     def get_current_rotation(self):
+        """Returns the currently used rotation. Can be RR_ROTATE_0, 
+        RR_ROTATE_90, RR_ROTATE_180 or RR_ROTATE_270"""
         _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return current.value
 
     def get_available_rotations(self):
+        """Returns a binary flag that holds the available resolutions"""
         _check_required_version((1,0))
         current = c_ushort()
         rotations = rr.XRRConfigRotations(self._config, byref(current))
         return rotations
 
     def get_current_size_index(self):
+        """Returns the position of the currently used resolution size in the
+           list of available resolutions. See get_available_sizes"""
         _check_required_version((1,0))
         rotation = c_ushort()
         size = rr.XRRConfigCurrentConfiguration(self._config,
@@ -336,6 +397,8 @@ class Screen:
         return size
 
     def get_available_sizes(self):
+        """Returns the available resolution sizes of the screen. The size
+           index points to the corresponding resolution of this list"""
         _check_required_version((1,0))
         nsizes = c_int()
         xcs = rr.XRRConfigSizes
@@ -344,6 +407,8 @@ class Screen:
         return sizes
 
     def set_config(self, size_index, rotation, rate):
+        """Configures the screen with the given resolution at the given size 
+           index, rotation and refresh rate"""
         _check_required_version((1,0))
         status = rr.XRRSetScreenConfigAndRate(self._display,
                                               self._config,
@@ -354,18 +419,21 @@ class Screen:
                                               self.get_timestamp())
 
     def get_output_by_name(self, name):
+        """Returns the output of the screen with the given name or None"""
         if self.outputs.has_key(name):
             return self.outputs[name]
         else:
             return None
 
     def get_output_by_id(self, id):
+        """Returns the output of the screen with the given xid or None"""
         for o in self.outputs.values():
             if o.id == id:
                 return o
         return None
 
     def print_info(self):
+        """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
         print "Modes (%s):" % self._resources.contents.nmode
         for i in range(self._resources.contents.nmode):
@@ -396,6 +464,7 @@ class Screen:
             #    print "%s %s" % (f, getattr(output._info.contents, f))
 
     def get_outputs(self):
+        """Returns the outputs of the screen"""
         _check_required_version((1,2))
         return self.outputs
 
@@ -405,17 +474,19 @@ class Screen:
                             c_int(fb_width_mm), c_int(fb_height_mm))
 
 def get_current_display():
+    """Returns the currently used display"""
     display_url = os.getenv("DISPLAY")
     dpy = xlib.XOpenDisplay(display_url)
     return dpy
 
 def get_current_screen():
+    """Returns the currently used screen"""
     screen = Screen(get_current_display())
     return screen
 
 def get_version():
-    """ Returns a tuple containing the major and minor version of the xrandr
-        extension """
+    """Returns a tuple containing the major and minor version of the xrandr
+       extension or None if the extension is not available"""
     major = c_int()
     minor = c_int()
     res = rr.XRRQueryVersion(get_current_display(),
@@ -425,6 +496,7 @@ def get_version():
     return None
 
 def has_extension():
+    """Returns True if the xrandr extension is available"""
     if XRANDR_VERSION:
         return True
     return False
@@ -446,6 +518,8 @@ def _from_gamma(g):
     rr.XRRFreeGamma(g)
 
 def _check_required_version(version):
+    """Raises an exception if the given or a later version of xrandr is not
+       available"""
     if XRANDR_VERSION == None:
         raise ExtensionMissingException
     elif XRANDR_VERSION < version:
