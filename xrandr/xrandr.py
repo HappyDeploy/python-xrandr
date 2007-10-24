@@ -185,7 +185,7 @@ class Crtc:
                             self._screen._resources,
                             self.xid,
                             self._screen.get_timestamp(),
-                            x, y,
+                            c_int(x), c_int(y),
                             mode.id,
                             RR_ROTATE_0,
                             byref(c_outputs),
@@ -391,6 +391,10 @@ class Screen:
         _check_required_version((1,2))
         return self.outputs
 
+    def set_screen_size(self, width, height, fb_width_mm, fb_height_mm):
+        rr.XRRSetScreenSize(self._display, self._root,
+                            c_int(width), c_int(height),
+                            c_int(fb_width_mm), c_int(fb_height_mm))
 
 def get_current_display():
     display_url = os.getenv("DISPLAY")
