@@ -1,3 +1,11 @@
+# xrandr.py
+#
+# Copyright 2007 Sebastian Heinlein
+#                Michael Vogt
+#                Canonical
+#
+# Licensed under the LGPL, see COPYRIGHT
+# 
 from ctypes import *
 import os
 

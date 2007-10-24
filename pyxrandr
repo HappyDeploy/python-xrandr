@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+#
+# pyxrandr
+#
+# Copyright 2007 Sebastian Heinlein
+#                Michael Vogt
+#                Canonical
+#
+# Licensed under the LGPL, see COPYRIGHT
 
 from gettext import gettext as _
 import gettext
