@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     screen = xrandr.get_current_screen()
 
-    output = screen.outputs["VGA-0"]
+    output = screen.outputs["VGA"]
     print "output: ", output.id
     print "active: ", output.is_active()
     print "ctrc: ", output.get_crtc()
@@ -36,6 +36,7 @@ if __name__ == "__main__":
         if check_crtc_for_output(screen, crtc):
             print "activating output %s" % output.id
             crtc.set_config(0,0, mode, [output])
+    sys.exit(0)
 
     # diabling works too
     #screen.get_crtc_by_xid(output.get_crtc()).disable()

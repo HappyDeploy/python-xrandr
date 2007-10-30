@@ -219,14 +219,14 @@ class Crtc:
     def set_config(self, x, y, mode, outputs):
         """Configure the hardware pipe with the given mode and outputs. X and y
            set the position of the crtc output in the screen"""
-        # FIXME: this is nasty, but I don't know how to build a 
-        #        dynamic array with just ctypes (it does not let
-        #        me assign dynamic values)
-        c_outputs_type = RROutput*1
-        c_outputs = c_outputs_type(outputs[0].id)
-        #for o in outputs:
-        #    c_outputs[i] = o.id
-        #    i += 1
+        c_outputs_type = (RROutput)*len(outputs)
+        # FIXME: ctypes should really support dynamic assignment
+        #        *after* we created the array
+        the_pain = "c_outputs = c_outputs_type("
+        for i in range(len(outputs)):
+            the_pain += "outputs[%s].id," % i
+        the_pain += ")"
+        exec(the_pain)
         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
                             self.xid,
