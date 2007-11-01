@@ -25,7 +25,8 @@ if __name__ == "__main__":
     print "ctrcs: ", output.get_crtcs()
 
     # pick a random mode
-    mode = screen._resources.contents.modes.contents[0]
+    modes = screen._resources.contents.modes
+    mode = modes[0]
     print "Setting: ", mode.width, mode.height
 
     # find output that is connected to crtc

@@ -68,10 +68,10 @@ class _XRRCrtcInfo(Structure):
         ("mode", RRMode),
         ("rotation", c_int),
         ("noutput", c_int),
-        ("outputs", POINTER(RROutput*100)),
-        ("rotations", POINTER(Rotation*100)),
+        ("outputs", POINTER(RROutput)),
+        ("rotations", POINTER(Rotation)),
         ("npossible", c_int),
-        ("possible", POINTER(RROutput*100)),
+        ("possible", POINTER(RROutput)),
         ]
     
 class _XRRScreenResources(Structure):
@@ -79,11 +79,11 @@ class _XRRScreenResources(Structure):
         ("timestamp", Time),
         ("configTimestamp", Time),
         ("ncrtc", c_int),
-        ("crtcs", POINTER(RRCrtc*100)),
+        ("crtcs", POINTER(RRCrtc)),
         ("noutput", c_int),
-        ("outputs", POINTER(RROutput*100)),
+        ("outputs", POINTER(RROutput)),
         ("nmode", c_int),
-        ("modes", POINTER(_XRRModeInfo*100)), # number needs just to be big
+        ("modes", POINTER(_XRRModeInfo)),
         ]
 
 class ExtensionMissingException(Exception):
@@ -103,12 +103,12 @@ class _XRROutputInfo(Structure):
         ("connection", Connection),
         ("subpixel_order", SubpixelOrder),
         ("ncrtc", c_int),
-        ("crtcs", POINTER(RRCrtc*100)),
+        ("crtcs", POINTER(RRCrtc)),
         ("nclone", c_int),
-        ("clones", POINTER(RROutput*100)),
+        ("clones", POINTER(RROutput)),
         ("nmode", c_int),
         ("npreferred", c_int),
-        ("modes", POINTER(RRMode*100))
+        ("modes", POINTER(RRMode))
         ]
 
 class _XRRCrtcGamma(Structure):
@@ -155,7 +155,7 @@ class Output:
         crtcs = []
         for i in range(self._info.contents.ncrtc):
             for crtc in self._screen.crtcs:
-                if crtc.xid == self._info.contents.crtcs.contents[i]:
+                if crtc.xid == self._info.contents.crtcs[i]:
                     crtcs.append(crtc)
         return crtcs
 
@@ -175,11 +175,11 @@ class Output:
            that are supported by the connected device"""
         modes = []
         for m in range(self._info.contents.nmode):
-            output_mode = self._info.contents.modes.contents[m]
+            output_modes = self._info.contents.modes
             for s in range(self._screen._resources.contents.nmode):
-                screen_mode = self._screen._resources.contents.modes.contents[s]
-                if screen_mode.id == output_mode:
-                    modes.append(screen_mode)
+                screen_modes = self._screen._resources.contents.modes
+                if screen_modes[s].id == output_modes[m]:
+                    modes.append(screen_modes[s])
         return modes
 
     def get_preferred_mode(self):
@@ -227,7 +227,7 @@ class Crtc:
                             c_int(x), c_int(y),
                             mode.id,
                             RR_ROTATE_0,
-                            _array_conv(map(lambda o: o.id, outputs), RROutput),
+                            _array_conv(outputs, RROutput, lambda x: x.id),
                             len(outputs))
     def disable(self):
         rr.XRRSetCrtcConfig(self._screen._display,
@@ -249,7 +249,7 @@ class Crtc:
     def outputs(self):
         outputs = []
         for i in range(self._info.contents.noutput):
-            id = self._info.contents.outputs.contents[i]
+            id = self._info.contents.outputs[i]
             o = self._screen.get_output_by_id(id)
             outputs.append(o)
         return outputs
@@ -312,24 +312,22 @@ class Screen:
     def _load_crtcs(self):
         """Loads the available XRandR 1.2 crtcs (hardware pipes) of
            the screen"""
+        gci = rr.XRRGetCrtcInfo
+        gci.restype = POINTER(_XRRCrtcInfo)
+        c = self._resources.contents.crtcs
         for i in range(self._resources.contents.ncrtc):
-            gci = rr.XRRGetCrtcInfo
-            gci.restype = POINTER(_XRRCrtcInfo)
-            xrrcrtcinfo = gci(self._display, self._resources,
-                              self._resources.contents.crtcs.contents[i])
-            self.crtcs.append(Crtc(xrrcrtcinfo,
-                              self._resources.contents.crtcs.contents[i],
-                              self))
+            xrrcrtcinfo = gci(self._display, self._resources, c[i])
+            self.crtcs.append(Crtc(xrrcrtcinfo, c[i], self))
 
     def _load_outputs(self):
         """Loads the available XRandR 1.2 outputs of the screen"""
+        goi = rr.XRRGetOutputInfo
+        goi.restype = POINTER(_XRROutputInfo)
+        o = self._resources.contents.outputs
         for i in range(self._resources.contents.noutput):
-            goi = rr.XRRGetOutputInfo
-            goi.restype = POINTER(_XRROutputInfo)
-            id = self._resources.contents.outputs.contents[i]
-            xrroutputinfo = goi(self._display, self._resources, id)
+            xrroutputinfo = goi(self._display, self._resources, o[i])
             self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
-                                                               id,
+                                                               o[i],
                                                                self)
     def get_timestamp(self):
         """Creates a X timestamp that must be used when applying changes, since
@@ -359,10 +357,10 @@ class Screen:
         _check_required_version((1,0))
         rates = []
         nrates = c_int()
-        rr.XRRConfigRates.restype = POINTER(c_ushort*100)
+        rr.XRRConfigRates.restype = POINTER(c_ushort)
         _rates = rr.XRRConfigRates(self._config, size_index, byref(nrates))
         for r in range(nrates.value):
-            rates.append(_rates.contents[r])
+            rates.append(_rates[r])
         return rates
 
     def get_current_rotation(self):
@@ -429,11 +427,11 @@ class Screen:
         """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
         print "Modes (%s):" % self._resources.contents.nmode
+        modes = self._resources.contents.modes
         for i in range(self._resources.contents.nmode):
-            print "  %s - %s %s" % (
-                self._resources.contents.modes.contents[i].name,                    
-                self._resources.contents.modes.contents[i].width,
-                self._resources.contents.modes.contents[i].height)
+            print "  %s - %s %s" % (modes[i].name,
+                                    modes[i].width,
+                                    modes[i].height)
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
