@@ -62,7 +62,7 @@ def main():
     if options.size != None:
         screen.set_config(options.size, cur_rotation, cur_rate)
     elif options.rate:
-        if rate in screen.get_available_rates_for_size_index(cur_size):
+        if options.rate in screen.get_available_rates_for_size_index(cur_size):
             screen.set_config(cur_size, cur_rotation, options.rate)
         else:
             print _("The given refresh rate is not supported")
