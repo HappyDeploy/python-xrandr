@@ -120,8 +120,9 @@ class _XRRCrtcGamma(Structure):
         ]
 
 def _array_conv(array, type, conv = lambda x:x):
-    res = type * len(array)
-    for i in array:
+    length = len(array)
+    res = (type*length)()
+    for i in range(length):
         res[i] = conv(array[i])
     return res
 
@@ -219,14 +220,6 @@ class Crtc:
     def set_config(self, x, y, mode, outputs):
         """Configure the hardware pipe with the given mode and outputs. X and y
            set the position of the crtc output in the screen"""
-        c_outputs_type = (RROutput)*len(outputs)
-        # FIXME: ctypes should really support dynamic assignment
-        #        *after* we created the array
-        the_pain = "c_outputs = c_outputs_type("
-        for i in range(len(outputs)):
-            the_pain += "outputs[%s].id," % i
-        the_pain += ")"
-        exec(the_pain)
         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
                             self.xid,
@@ -234,8 +227,8 @@ class Crtc:
                             c_int(x), c_int(y),
                             mode.id,
                             RR_ROTATE_0,
-                            byref(c_outputs),
-                            len(c_outputs))
+                            _array_conv(map(lambda o: o.id, outputs), RROutput),
+                            len(outputs))
     def disable(self):
         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
