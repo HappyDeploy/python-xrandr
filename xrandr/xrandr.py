@@ -198,6 +198,15 @@ class Output:
             return False
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
+    @property
+    def clones(self):
+        clones = []
+        for i in range(self._info.contents.nclone):
+            id = self._info.contents.clones[i]
+            o = self._screen.get_output_by_id(id)
+            clones.append(o)
+        return clones
+
 class Crtc:
     """The crtc is a reference to a hardware pipe that is provided by the
        graphics device. Outputs can be attached to crtcs"""
@@ -253,6 +262,28 @@ class Crtc:
             o = self._screen.get_output_by_id(id)
             outputs.append(o)
         return outputs
+
+    def supports_output(self, output):
+        """Check if the output can be used by the crtc. 
+           See check_crtc_for_output in xrandr.c"""
+        if not self.xid in output.get_crtcs():
+            return False
+        for other in screen.outputs.values():
+            if other.id == output.id:
+                continue
+            if other.get_crtc() == self.xid:
+                return False
+            # Check if the output can be clones to the other outputs on 
+            # the same crtc
+            if not other in output.clones:
+                return False
+            # Compare the state of the crtc and the output
+            # FIXME
+            #for a in ["mode", "x", "y", "rotation"]:
+             #   if getattr(self._info).contents != getattr(output._info).contents:
+             #       return False
+        return True
+
 
 class Screen:
     def __init__(self, dpy):
@@ -517,6 +548,8 @@ def _check_required_version(version):
         raise UnsupportedException
 
 XRANDR_VERSION = get_version()
+
+
 
 """
 
