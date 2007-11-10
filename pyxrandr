@@ -54,20 +54,17 @@ def main():
         print _("The XRandR extension is not available")
         sys.exit(1)
 
+    changed_1_0 = False
+
     screen = xrandr.get_current_screen()
-    cur_rate = screen.get_current_rate()
-    cur_rotation = screen.get_current_rotation()
-    cur_size = screen.get_current_size_index()
 
     if options.size != None:
-        screen.set_config(options.size, cur_rotation, cur_rate)
-    elif options.rate:
-        if options.rate in screen.get_available_rates_for_size_index(cur_size):
-            screen.set_config(cur_size, cur_rotation, options.rate)
-        else:
-            print _("The given refresh rate is not supported")
-            sys.exit(1)
-    elif options.rotate:
+        screen.set_size_index(options.size)
+        changed_1_0 = True
+    if options.rate:
+        screen.set_refresh_rate(options.rate)
+        changed_1_0 = True
+    if options.rotate:
         if options.rotate in [_("normal"), "0"]:
             rotation = xrandr.RR_ROTATE_0
         elif options.rotate in [_("right"), "90"]:
@@ -79,7 +76,10 @@ def main():
         else:
             print _("Invalid orientation")
             sys.exit(1)
-        screen.set_config(options.size, rotation, cur_rate)
+        screen.set_rotation(rotation)
+        changed_1_0 = True
+    if changed_1_0:
+        screen.apply_config()
     elif options.output:
         output = screen.get_output_by_name(options.output)
         if not output:
@@ -89,12 +89,8 @@ def main():
             output.disable()
     else:
         screen.print_info()
-    screen.get_available_rates_for_size_index(1)
 
 if __name__ == "__main__":
     main()
-
-
-
 
 # vim:ts=4:sw=4:et
