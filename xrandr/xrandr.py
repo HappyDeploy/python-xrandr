@@ -507,6 +507,12 @@ class Screen:
         for s in self.get_available_sizes():
             print "  [%s] %s x %s" % (i, s.width, s.height)
             i += 1
+        print "Rotations:"
+        rots = self.get_available_rotations()
+        if rots & RR_ROTATE_0: print "  normal"
+        if rots & RR_ROTATE_90: print "  right"
+        if rots & RR_ROTATE_180: print "  inverted"
+        if rots & RR_ROTATE_270: print "  left"
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
@@ -514,7 +520,6 @@ class Screen:
                                             output.get_physical_width(),
                                             output.get_physical_height())
             if output.is_active():
-                print "    Rotations %s" % output.get_available_rotations()
                 modes = output.get_available_modes()
                 print "    Modes:"
                 for m in range(len(modes)):
