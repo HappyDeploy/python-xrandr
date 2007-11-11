@@ -69,7 +69,7 @@ class _XRRCrtcInfo(Structure):
         ("rotation", c_int),
         ("noutput", c_int),
         ("outputs", POINTER(RROutput)),
-        ("rotations", POINTER(Rotation)),
+        ("rotations", Rotation),
         ("npossible", c_int),
         ("possible", POINTER(RROutput)),
         ]
@@ -532,8 +532,18 @@ class Screen:
                     refresh = mode.dotClock / (mode.hTotal * mode.vTotal)
                     print "      %s x %s @ %s%s" % (mode.width, mode.height, 
                                                     refresh, preferred)
-            #for (f,t) in output._info.contents._fields_:
-            #    print "%s %s" % (f, getattr(output._info.contents, f))
+                print "    Rotations:"
+                rots = output.get_available_rotations()
+                if rots & RR_ROTATE_0: print "      normal"
+                if rots & RR_ROTATE_90: print "      right"
+                if rots & RR_ROTATE_180: print "      inverted"
+                if rots & RR_ROTATE_270: print "      left"
+                if verbose:
+                    print "    Core properties:"
+                    for (f,t) in output._info.contents._fields_:
+                        print "      %s: %s" % (f,
+                                               getattr(output._info.contents, 
+                                                       f))
 
     def get_outputs(self):
         """Returns the outputs of the screen"""
