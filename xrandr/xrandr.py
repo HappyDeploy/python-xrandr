@@ -505,7 +505,8 @@ class Screen:
         i = 0
         print "Sizes:"
         for s in self.get_available_sizes():
-            print "  [%s] %s x %s" % (i, s.width, s.height)
+            print "  [%s] %s x %s @ %s" % (i, s.width, s.height,
+                                           self.get_available_rates_for_size_index(i))
             i += 1
         print "Rotations:"
         rots = self.get_available_rotations()
