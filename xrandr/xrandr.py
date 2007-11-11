@@ -492,15 +492,21 @@ class Screen:
                 return o
         return None
 
-    def print_info(self):
+    def print_info(self, verbose=False):
         """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
-        print "Modes (%s):" % self._resources.contents.nmode
-        modes = self._resources.contents.modes
-        for i in range(self._resources.contents.nmode):
-            print "  %s - %s %s" % (modes[i].name,
-                                    modes[i].width,
-                                    modes[i].height)
+        if verbose:
+            print "Modes (%s):" % self._resources.contents.nmode
+            modes = self._resources.contents.modes
+            for i in range(self._resources.contents.nmode):
+                print "  %s - %sx%s" % (modes[i].name,
+                                       modes[i].width,
+                                       modes[i].height)
+        i = 0
+        print "Sizes:"
+        for s in self.get_available_sizes():
+            print "  [%s] %s x %s" % (i, s.width, s.height)
+            i += 1
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
