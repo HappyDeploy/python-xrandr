@@ -69,7 +69,7 @@ class _XRRCrtcInfo(Structure):
         ("rotation", c_int),
         ("noutput", c_int),
         ("outputs", POINTER(RROutput)),
-        ("rotations", POINTER(Rotation)),
+        ("rotations", Rotation),
         ("npossible", c_int),
         ("possible", POINTER(RROutput)),
         ]
@@ -172,13 +172,21 @@ class Output:
     def get_available_rotations(self):
         """Returns a binary flag of the supported rotations of the output or
            0 if the output is disabled"""
+        rotations = RR_ROTATE_0
+        found = False
         if self.is_active():
-            # Query the supported hardware rotations of the attached
-            # hardware pipe
-            crtc = self._screen.get_crtc_by_xid(self._info.contents.crtc)
-            return crtc.get_available_rotations()
-        else:
-            return 0
+            # Get the rotations supported by all crtcs to make assigning
+            # crtcs easier. Furthermore there don't seem to be so many
+            # cards which show another behavior
+            for crtc in self.get_crtcs():
+                # Set rotations to the value of the first found crtc and
+                # then create a subset only for all other crtcs
+                if not found:
+                    rotations = crtc.get_available_rotations()
+                    found = True
+                else:
+                    rotations = rotations & crtc.get_available_rotations()
+        return rotations
 
     def get_available_modes(self):
         """Returns the list of supported mode lines (resolution, refresh rate)
@@ -293,6 +301,14 @@ class Crtc:
              #       return False
         return True
 
+    def supports_rotation(self, rotation):
+        """Check if the given rotation is supported by the crtc"""
+        rotations = self._info.contents.rotations
+        dir = rotation & (RR_ROTATE_0|RR_ROTATE_90|RR_ROTATE_180|RR_ROTATE_270)
+        reflect = rotation & (RR_REFLECT_X|RR_REFLECT_Y)
+        if (((rotations & dir) != 0) and ((rotations & reflect) == reflect)):
+            return True
+        return False
 
 class Screen:
     def __init__(self, dpy):
@@ -532,8 +548,18 @@ class Screen:
                     refresh = mode.dotClock / (mode.hTotal * mode.vTotal)
                     print "      %s x %s @ %s%s" % (mode.width, mode.height, 
                                                     refresh, preferred)
-            #for (f,t) in output._info.contents._fields_:
-            #    print "%s %s" % (f, getattr(output._info.contents, f))
+                print "    Rotations:"
+                rots = output.get_available_rotations()
+                if rots & RR_ROTATE_0: print "      normal"
+                if rots & RR_ROTATE_90: print "      right"
+                if rots & RR_ROTATE_180: print "      inverted"
+                if rots & RR_ROTATE_270: print "      left"
+                if verbose:
+                    print "    Core properties:"
+                    for (f,t) in output._info.contents._fields_:
+                        print "      %s: %s" % (f,
+                                               getattr(output._info.contents, 
+                                                       f))
 
     def get_outputs(self):
         """Returns the outputs of the screen"""
