@@ -135,6 +135,16 @@ class Output:
         self._info = info
         self.id = id
         self._screen = screen
+        # Store changes later here
+        self._mode = None
+        self._crtc = None
+        self._rotation = RR_ROTATE_0
+        self._relation = None
+        self._position = None
+        self._reflection = None
+        self._automatic = None
+        self._rate = None
+
     def __del__(self):
         """Frees the internal reference to the output info if the output gets
            removed"""
@@ -198,8 +208,7 @@ class Output:
             return False
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
-    @property
-    def clones(self):
+    def get_clones(self):
         clones = []
         for i in range(self._info.contents.nclone):
             id = self._info.contents.clones[i]
@@ -296,12 +305,17 @@ class Screen:
         self._root = xlib.XDefaultRootWindow(self._display, self._screen)
         self._id = rr.XRRRootToScreen(self._display, self._root)
         
-        self._load_screen_size_range()
         self._load_resources()
         self._load_config()
         if XRANDR_VERSION >= (1,2):
+            self._load_screen_size_range()
             self._load_outputs()
             self._load_crtcs()
+
+        # Store XRandR 1.0 changes here
+        self._rate = self.get_current_rate()
+        self._rotation = self.get_current_rotation()
+        self._size_index = self.get_current_size_index()
 
     def __del__(self):
         """Free the reference to the interal screen config if the screen
@@ -422,23 +436,47 @@ class Screen:
         """Returns the available resolution sizes of the screen. The size
            index points to the corresponding resolution of this list"""
         _check_required_version((1,0))
+        sizes = []
         nsizes = c_int()
         xcs = rr.XRRConfigSizes
-        xcs.restype = POINTER(_XRRScreenSize*100)
-        core_sizes = xrs(self._config, byref(nsizes))
+        xcs.restype = POINTER(_XRRScreenSize)
+        _sizes = xcs(self._config, byref(nsizes))
+        for r in range(nsizes.value):
+            sizes.append(_sizes[r])
         return sizes
 
-    def set_config(self, size_index, rotation, rate):
+    def set_config(self, size_index, rate, rotation):
         """Configures the screen with the given resolution at the given size 
-           index, rotation and refresh rate"""
+           index, rotation and refresh rate. To get in effect call
+           Screen.apply_config()"""
         _check_required_version((1,0))
-        status = rr.XRRSetScreenConfigAndRate(self._display,
-                                              self._config,
-                                              self._root,
-                                              size_index,
-                                              rotation,
-                                              rate,
-                                              self.get_timestamp())
+        self.set_size_index(size_index)
+        self.set_refresh_rate(rate)
+        self.set_rotation(rotation)
+
+    def set_size_index(self, index):
+        """Sets the reoslution of the screen. To get in effect call
+           Screen.apply_config()"""
+        if index in range(len(self.get_available_sizes())):
+            self._size_index = index
+        else:
+            raise
+
+    def set_rotation(self, rotation):
+        """Sets the rotation of the screen. To get in effect call
+           Screen.apply_config()"""
+        if self.get_available_rotations() & rotation:
+            self._rotation = rotation
+        else:
+            raise
+
+    def set_refresh_rate(self, rate):
+        """Sets the refresh rate of the screen. To get in effect call
+           Screen.apply_config()"""
+        if rate in self.get_available_rates_for_size_index(self._size_index):
+            self._rate = rate
+        else:
+            raise
 
     def get_output_by_name(self, name):
         """Returns the output of the screen with the given name or None"""
@@ -454,15 +492,28 @@ class Screen:
                 return o
         return None
 
-    def print_info(self):
+    def print_info(self, verbose=False):
         """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
-        print "Modes (%s):" % self._resources.contents.nmode
-        modes = self._resources.contents.modes
-        for i in range(self._resources.contents.nmode):
-            print "  %s - %s %s" % (modes[i].name,
-                                    modes[i].width,
-                                    modes[i].height)
+        if verbose:
+            print "Modes (%s):" % self._resources.contents.nmode
+            modes = self._resources.contents.modes
+            for i in range(self._resources.contents.nmode):
+                print "  %s - %sx%s" % (modes[i].name,
+                                       modes[i].width,
+                                       modes[i].height)
+        i = 0
+        print "Sizes:"
+        for s in self.get_available_sizes():
+            print "  [%s] %s x %s @ %s" % (i, s.width, s.height,
+                                           self.get_available_rates_for_size_index(i))
+            i += 1
+        print "Rotations:"
+        rots = self.get_available_rotations()
+        if rots & RR_ROTATE_0: print "  normal"
+        if rots & RR_ROTATE_90: print "  right"
+        if rots & RR_ROTATE_180: print "  inverted"
+        if rots & RR_ROTATE_270: print "  left"
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
@@ -470,7 +521,6 @@ class Screen:
                                             output.get_physical_width(),
                                             output.get_physical_height())
             if output.is_active():
-                print "    Rotations %s" % output.get_available_rotations()
                 modes = output.get_available_modes()
                 print "    Modes:"
                 for m in range(len(modes)):
@@ -494,6 +544,22 @@ class Screen:
         rr.XRRSetScreenSize(self._display, self._root,
                             c_int(width), c_int(height),
                             c_int(fb_width_mm), c_int(fb_height_mm))
+
+    def apply_output_config(self):
+        """Used for instantly applying RandR 1.2 changes"""
+        _check_required_version((1,2))
+        pass
+
+    def apply_config(self):
+        """Used for instantly applying RandR 1.0 changes"""
+        _check_required_version((1,0))
+        status = rr.XRRSetScreenConfigAndRate(self._display,
+                                              self._config,
+                                              self._root,
+                                              self._size_index,
+                                              self._rotation,
+                                              self._rate,
+                                              self.get_timestamp())
 
 def get_current_display():
     """Returns the currently used display"""
@@ -548,8 +614,6 @@ def _check_required_version(version):
         raise UnsupportedException
 
 XRANDR_VERSION = get_version()
-
-
 
 """
 
