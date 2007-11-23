@@ -351,7 +351,7 @@ class Crtc:
         return False
 
 class Screen:
-    def __init__(self, dpy):
+    def __init__(self, dpy, screen=-1):
         """Initializes the screen"""
         # Some sane default values
         self.outputs = {}
@@ -366,7 +366,13 @@ class Screen:
         self._height_mm = 0
 
         self._display = dpy
-        self._screen = xlib.XDefaultScreen(self._display)
+        if not -1 <= screen < xlib.XScreenCount(dpy):
+            #FIXME: fail in a nicer way
+            raise
+        elif screen == -1:
+            self._screen = xlib.XDefaultScreen(dpy)
+        else:
+            self._screen = screen
         self._root = xlib.XDefaultRootWindow(self._display, self._screen)
         self._id = rr.XRRRootToScreen(self._display, self._root)
         
@@ -736,6 +742,11 @@ def get_current_screen():
     """Returns the currently used screen"""
     screen = Screen(get_current_display())
     return screen
+
+def get_screen_of_display(display, count):
+    """Returns the screen of the given display"""
+    dpy = xlib.XOpenDisplay(display)
+    return Screen(dpy, count)
 
 def get_version():
     """Returns a tuple containing the major and minor version of the xrandr
