@@ -1,21 +1,59 @@
-# xrandr.py
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
-# Copyright 2007 Sebastian Heinlein
-#                Michael Vogt
-#                Canonical
+# Python-XRandR provides a high level API for the XRandR extension of the
+# X.org server. XRandR allows to configure resolution, refresh rate, rotation 
+# of the screen and multiple outputs of graphics cards.
 #
-# Licensed under the LGPL, see COPYRIGHT
-# 
+# In many aspects it follows the design of the xrand tool written by
+# Keith Packard
+#
+# Copyright 2007 © Sebastian Heinlein <sebastian.heinlein@web.de>
+# Copyright 2007 © Michael Vogt <mvo@ubuntu.com>
+# Copyright 2007 © Canonical Ltd.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
 from ctypes import *
 import os
 
-RR_ROTATE_0 = 1
-RR_ROTATE_90 = 2
-RR_ROTATE_180 = 4
-RR_ROTATE_270 = 8
+(RR_ROTATE_0,
+ RR_ROTATE_90,
+ RR_ROTATE_180,
+ RR_ROTATE_270,
+ RR_REFLECT_X,
+ RR_REFLECT_Y) = map(lambda x: 2**x, range(6))
 
-RR_REFLECT_X = 16
-RR_REFLECT_Y = 32
+# Flags to keep track of changes
+(CHANGES_NONE,
+ CHANGES_CRTC,
+ CHANGES_MODE,
+ CHANGES_RELATION,
+ CHANGES_POSITION,
+ CHANGES_ROTATION,
+ CHANGES_REFLECTION,
+ CHANGES_AUTOMATIC,
+ CHANGES_REFRESH,
+ CHANGES_PROPERTY) = map(lambda x: 2**x, range(10))
+
+# Relation information
+(RELATION_ABOVE,
+ RELATION_BELOW,
+ RELATION_RIGHT_OF,
+ RELATION_LEFT_OF,
+ RELATION_SAME_AS) = range(5)
 
 # some fundamental datatypes 
 RRCrtc = c_long
@@ -140,10 +178,12 @@ class Output:
         self._crtc = None
         self._rotation = RR_ROTATE_0
         self._relation = None
+        self._relative_to = None
         self._position = None
         self._reflection = None
         self._automatic = None
         self._rate = None
+        self._changes = CHANGES_NONE
 
     def __del__(self):
         """Frees the internal reference to the output info if the output gets
@@ -313,8 +353,17 @@ class Crtc:
 class Screen:
     def __init__(self, dpy):
         """Initializes the screen"""
+        # Some sane default values
         self.outputs = {}
         self.crtcs = []
+        self._width = 0
+        self._height = 0
+        self._width_max = 0
+        self._height_max = 0
+        self._width_min = 0
+        self._height_min = 0
+        self._width_mm = 0
+        self._height_mm = 0
 
         self._display = dpy
         self._screen = xlib.XDefaultScreen(self._display)
@@ -323,6 +372,8 @@ class Screen:
         
         self._load_resources()
         self._load_config()
+        (self._width, self._height, 
+         self._width_mm, self._height_mm) = self.get_size()
         if XRANDR_VERSION >= (1,2):
             self._load_screen_size_range()
             self._load_outputs()
@@ -358,10 +409,10 @@ class Screen:
                                        byref(minWidth), byref(minHeight),
                                        byref(maxWidth), byref(maxHeight))
         if res:
-            self.max_width = maxWidth.value
-            self.min_width = maxWidth.value
-            self.max_height = maxHeight.value
-            self.min_height = minHeight.value
+            self._width_max = maxWidth.value
+            self._width_min = minWidth.value
+            self._height_max = maxHeight.value
+            self._height_min = minHeight.value
 
     def _load_resources(self):
         """Loads the screen resources. Only needed privately for the 
@@ -390,6 +441,15 @@ class Screen:
             self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
                                                                o[i],
                                                                self)
+
+    def get_size(self):
+        """Returns the current pixel and physical size of the screen"""
+        width = xlib.XDisplayWidth(self._display, self._screen)
+        width_mm = xlib.XDisplayWidthMM(self._display, self._screen)
+        height = xlib.XDisplayHeight(self._display, self._screen)
+        height_mm = xlib.XDisplayHeightMM(self._display, self._screen)
+        return width, height, width_mm, height_mm
+
     def get_timestamp(self):
         """Creates a X timestamp that must be used when applying changes, since
            they can be delayed"""
@@ -511,6 +571,8 @@ class Screen:
     def print_info(self, verbose=False):
         """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
+        print "Screen %s: minimum %s x %s, current %s x %s, maximum %s x %s" % (self._screen, self._width_min, self._height_min, self._width, self._height, self._width_max, self._height_max)
+        print "          %s mm x %s mm" % (self._width_mm, self._height_mm)
         if verbose:
             print "Modes (%s):" % self._resources.contents.nmode
             modes = self._resources.contents.modes
@@ -566,15 +628,22 @@ class Screen:
         _check_required_version((1,2))
         return self.outputs
 
-    def set_screen_size(self, width, height, fb_width_mm, fb_height_mm):
+    def set_size(self, width, height, width_mm, height_mm):
+        """Apply the given pixel and physical size to the screen"""
+        _check_required_version((1,2))
+        # Check if we really need to apply the changes
+        if (width, height, width_mm, height_mm) == self.get_size(): return
         rr.XRRSetScreenSize(self._display, self._root,
                             c_int(width), c_int(height),
-                            c_int(fb_width_mm), c_int(fb_height_mm))
+                            c_int(width_mm), c_int(height_mm))
 
     def apply_output_config(self):
         """Used for instantly applying RandR 1.2 changes"""
         _check_required_version((1,2))
-        pass
+        self._arrange_outputs()
+        self._calculate_size()
+        self._set_size(self._width, self._height,
+                       self._width_mm, self,_height_mm)
 
     def apply_config(self):
         """Used for instantly applying RandR 1.0 changes"""
@@ -586,6 +655,76 @@ class Screen:
                                               self._rotation,
                                               self._rate,
                                               self.get_timestamp())
+
+    def _arrange_outputs(self):
+        """Arrange all output positions according to their relative position"""
+        for output in self.get_outputs():
+            # Skip not changed and not used outputs
+            if not output.has_changed(CHANGES_RELATION) or \
+               output._mode == None: continue
+            relative = output._relative_to
+            if not relative or not relative._mode:
+                output._x = 0
+                output._y = 0
+                output._changes = output._changes | CHANGES_POSITION
+            if output._relation == RELATION_LEFTOF:
+                output._y = relative._y
+                output._x = relative._x - get_mode_width(output._mode,
+                                                         output._rotation)
+            elif output._relation == RELATION_RIGHTOF:
+                output._y = relative._y
+                output._x = relative._x + get_mode_width(output._mode,
+                                                          output._rotation)
+            elif output._relation == RELATION_ABOVE:
+                output._y = relative._y - get_mode_height(output._mode,
+                                                          output._rotation)
+                output._x = relative._x
+
+            elif output._relation == RELATION_BELOW:
+                output._y = relative._x + get_mode_height(output._mode,
+                                                          output._rotation)
+                output._y = relative._y
+            elif output._relation == RELATION_SAMEAS:
+                output._x = relative._x
+                output._y = relative._y
+            output._changes = output._changes | CHANGES_POSITION
+        # Normalize the postions so to the upper left cornor of all outputs 
+        # is at 0,0
+        min_x = 32768
+        max_x = 32768
+        for output in self.get_outputs():
+            if output._mode == None: continue
+            if output._x < min_x: min_x = output._x
+            if output._y < min_y: min_y = output._y
+        for output in self.get_outputs():
+            output._x -= min_x
+            output._y -= min_y
+            output._changes = output._changes | CHANGES_POSITION
+
+    def _calculate_size(self):
+        width = self._width
+        height = self._height
+        for output in self.get_outputs():
+            if not output._mode: continue
+            x = output._x
+            y = output._y
+            w = get_mode_width(output._mode, output._rotation)
+            h = get_mode_height(output._mode, output._rotation)
+            if x + w > width: width = x + w
+            if y + h > height: height = y + h
+        if width > self._width_max or height > self._height_max:
+            #FIXME: Fail in a nicer way
+            raise
+        else:
+            if height < self._height_min: 
+                self._fb_height = self._height_min
+            else:
+                self._height = height
+            if width < self._min_width: 
+                self._width = self._width_min
+            else:
+                self._width = width
+        #FIXME: Physical size is missing
 
 def get_current_display():
     """Returns the currently used display"""
@@ -639,22 +778,25 @@ def _check_required_version(version):
     elif XRANDR_VERSION < version:
         raise UnsupportedException
 
+def get_mode_height(mode, rotation):
+    """Return the height of the given mode taking the rotation into account"""
+    if rotation & (RR_ROTATE_0 | RR_ROTATE_180):
+        return mode.contents.width
+    elif rotation & (RR_ROTATE_90 | RR_ROTATE_270):
+        return mode.contents.height
+    else:
+        return 0
+
+def get_mode_width(mode, rotation):
+    """Return the width of the given mode taking the rotation into account"""
+    if rotation & (RR_ROTATE_0 | RR_ROTATE_180):
+        return mode.contents.height
+    elif rotation & (RR_ROTATE_90 | RR_ROTATE_270):
+        return mode.contents.width
+    else:
+        return 0
+
+
 XRANDR_VERSION = get_version()
 
-"""
-
-#FIXME: make this work somehow, the screen size changes
-#       with the resolution
-#print
-#fb_width = 800
-#fb_height = 600
-#dpi = 25.4 * rr.XDisplayHeight (dpy, screen) / rr.XDisplayHeightMM(dpy, screen)
-#fb_width_mm = 25.4 * fb_width / dpi
-#fb_height_mm = 25.4 * fb_height /dpi
-#print "dpi: ",dpi
-#print "new width: ", fb_width
-#print "new height: ", fb_height
-#print "fb_width_mm: ",fb_width_mm
-#print "fb_height_mm: ",fb_height_mm
-#rr.XRRSetScreenSize(dpy, win, int(fb_width_mm), int(fb_height_mm))
-"""
+# vim:ts=4:sw=4:et
