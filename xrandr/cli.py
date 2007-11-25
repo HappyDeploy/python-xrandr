@@ -72,6 +72,11 @@ def main():
                       action="store_true", dest="output_disable",
                       #TRANSLATORS: command line option
                       help=_("disable the selected output"))
+    parser.add_option("--left-of", "",
+                      default=None,
+                      action="store", type="string", dest="output_left",
+                      #TRANSLATORS: command line option
+                      help=_("move the output left to the given one"))
     (options, args) = parser.parse_args()
 
     if xrandr.has_extension():
@@ -113,6 +118,9 @@ def main():
             sys.exit(1)
         if options.output_disable:
             output.disable()
+        elif options.output_left:
+            output.set_relation(options.output_left, xrandr.RELATION_LEFT_OF)
+        screen.apply_output_config()
     else:
         screen.print_info(options.verbose)
 

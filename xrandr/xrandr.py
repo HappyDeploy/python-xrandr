@@ -29,24 +29,37 @@
 from ctypes import *
 import os
 
-(RR_ROTATE_0,
- RR_ROTATE_90,
- RR_ROTATE_180,
- RR_ROTATE_270,
- RR_REFLECT_X,
- RR_REFLECT_Y) = map(lambda x: 2**x, range(6))
+RR_ROTATE_0 = 1
+RR_ROTATE_90 = 2
+RR_ROTATE_180 = 4
+RR_ROTATE_270 = 8
+RR_REFLECT_X = 16
+RR_REFLECT_Y = 32
+
+RR_CONNECTED = 0
+RR_DISCONNECTED = 1
+RR_UNKOWN_CONNECTION = 2
+
+RR_BAD_OUTPUT = 0
+RR_BAD_CRTC = 1
+RR_BAD_MODE = 2
+
+RR_SET_CONFIG_SUCCESS = 0
+RR_SET_CONFIG_INVALID_CONFIG_TIME = 1
+RR_SET_CONFIG_INVALID_TIME = 2
+RR_SET_CONFIG_FAILED = 3
 
 # Flags to keep track of changes
-(CHANGES_NONE,
- CHANGES_CRTC,
- CHANGES_MODE,
- CHANGES_RELATION,
- CHANGES_POSITION,
- CHANGES_ROTATION,
- CHANGES_REFLECTION,
- CHANGES_AUTOMATIC,
- CHANGES_REFRESH,
- CHANGES_PROPERTY) = map(lambda x: 2**x, range(10))
+CHANGES_NONE = 0
+CHANGES_CRTC = 1
+CHANGES_MODE = 2
+CHANGES_RELATION = 4
+CHANGES_POSITION = 8
+CHANGES_ROTATION = 16
+CHANGES_REFLECTION = 32
+CHANGES_AUTOMATIC = 64
+CHANGES_REFRESH = 128
+CHANGES_PROPERTY = 256
 
 # Relation information
 (RELATION_ABOVE,
@@ -124,10 +137,15 @@ class _XRRScreenResources(Structure):
         ("modes", POINTER(_XRRModeInfo)),
         ]
 
-class ExtensionMissingException(Exception):
+class RRError(Exception):
+    """Base exception class of the module"""
     pass
-class UnsupportedException(Exception):
-    pass
+
+class UnsupportedRRError(RRError):
+    """Raised if the required XRandR extension version is not available"""
+    def __init__(self, required, current):
+        self.required = required
+        self.current = current
 
 # XRRGetOutputInfo
 class _XRROutputInfo(Structure):
@@ -184,6 +202,10 @@ class Output:
         self._automatic = None
         self._rate = None
         self._changes = CHANGES_NONE
+        self._x = 0
+        self._y = 0
+
+        self.name = self._info.contents.name
 
     def __del__(self):
         """Frees the internal reference to the output info if the output gets
@@ -263,6 +285,22 @@ class Output:
             o = self._screen.get_output_by_id(id)
             clones.append(o)
         return clones
+
+    def set_relation(self, relative, relation):
+        rel = self._screen.get_output_by_name(relative)
+        if rel and relation in (RELATION_LEFT_OF, RELATION_RIGHT_OF, 
+                                RELATION_ABOVE, RELATION_BELOW, 
+                                RELATION_SAME_AS):
+            self._relation = relation
+            self._relative_to = rel
+            self._changes = self._changes | CHANGES_RELATION
+        else:
+            raise RRError("The given relative output or relation is not "
+                          "available")
+
+    def has_changed(self, changes):
+        return self._changes & changes
+
 
 class Crtc:
     """The crtc is a reference to a hardware pipe that is provided by the
@@ -368,7 +406,7 @@ class Screen:
         self._display = dpy
         if not -1 <= screen < xlib.XScreenCount(dpy):
             #FIXME: fail in a nicer way
-            raise
+            raise RRError("The chosen screen is not available", screen)
         elif screen == -1:
             self._screen = xlib.XDefaultScreen(dpy)
         else:
@@ -382,8 +420,8 @@ class Screen:
          self._width_mm, self._height_mm) = self.get_size()
         if XRANDR_VERSION >= (1,2):
             self._load_screen_size_range()
-            self._load_outputs()
             self._load_crtcs()
+            self._load_outputs()
 
         # Store XRandR 1.0 changes here
         self._rate = self.get_current_rate()
@@ -444,9 +482,12 @@ class Screen:
         o = self._resources.contents.outputs
         for i in range(self._resources.contents.noutput):
             xrroutputinfo = goi(self._display, self._resources, o[i])
-            self.outputs[xrroutputinfo.contents.name] = Output(xrroutputinfo,
-                                                               o[i],
-                                                               self)
+            output = Output(xrroutputinfo, o[i], self)
+            self.outputs[xrroutputinfo.contents.name] = output
+            # Store the mode of the crtc in the output instance
+            crtc = self.get_crtc_by_xid(output.get_crtc())
+            if crtc:
+                output._mode = crtc._info.contents.mode
 
     def get_size(self):
         """Returns the current pixel and physical size of the screen"""
@@ -542,7 +583,8 @@ class Screen:
         if index in range(len(self.get_available_sizes())):
             self._size_index = index
         else:
-            raise
+            raise RRError("There isn't any size associated "
+                          "to the index %s" % index)
 
     def set_rotation(self, rotation):
         """Sets the rotation of the screen. To get in effect call
@@ -550,7 +592,7 @@ class Screen:
         if self.get_available_rotations() & rotation:
             self._rotation = rotation
         else:
-            raise
+            raise RRError("The chosen rotation is not supported")
 
     def set_refresh_rate(self, rate):
         """Sets the refresh rate of the screen. To get in effect call
@@ -558,7 +600,8 @@ class Screen:
         if rate in self.get_available_rates_for_size_index(self._size_index):
             self._rate = rate
         else:
-            raise
+            raise RRError("The chosen refresh rate %s is not "
+                          "supported" % rate)
 
     def get_output_by_name(self, name):
         """Returns the output of the screen with the given name or None"""
@@ -632,7 +675,11 @@ class Screen:
     def get_outputs(self):
         """Returns the outputs of the screen"""
         _check_required_version((1,2))
-        return self.outputs
+        return self.outputs.values()
+
+    def get_output_names(self):
+        _check_required_version((1,2))
+        return self.outputs.keys()
 
     def set_size(self, width, height, width_mm, height_mm):
         """Apply the given pixel and physical size to the screen"""
@@ -648,8 +695,8 @@ class Screen:
         _check_required_version((1,2))
         self._arrange_outputs()
         self._calculate_size()
-        self._set_size(self._width, self._height,
-                       self._width_mm, self,_height_mm)
+        self.set_size(self._width, self._height,
+                      self._width_mm, self._height_mm)
 
     def apply_config(self):
         """Used for instantly applying RandR 1.0 changes"""
@@ -697,7 +744,7 @@ class Screen:
         # Normalize the postions so to the upper left cornor of all outputs 
         # is at 0,0
         min_x = 32768
-        max_x = 32768
+        min_y = 32768
         for output in self.get_outputs():
             if output._mode == None: continue
             if output._x < min_x: min_x = output._x
@@ -719,14 +766,14 @@ class Screen:
             if x + w > width: width = x + w
             if y + h > height: height = y + h
         if width > self._width_max or height > self._height_max:
-            #FIXME: Fail in a nicer way
-            raise
+            raise RRError("The required size is not supported",
+                          (width, height), (self._width_max, self._width_min))
         else:
             if height < self._height_min: 
                 self._fb_height = self._height_min
             else:
                 self._height = height
-            if width < self._min_width: 
+            if width < self._width_min: 
                 self._width = self._width_min
             else:
                 self._width = width
@@ -784,10 +831,8 @@ def _from_gamma(g):
 def _check_required_version(version):
     """Raises an exception if the given or a later version of xrandr is not
        available"""
-    if XRANDR_VERSION == None:
-        raise ExtensionMissingException
-    elif XRANDR_VERSION < version:
-        raise UnsupportedException
+    if XRANDR_VERSION == None or XRANDR_VERSION < version:
+        raise UnsupportedRRError(version, XRANDR_VERSION)
 
 def get_mode_height(mode, rotation):
     """Return the height of the given mode taking the rotation into account"""
