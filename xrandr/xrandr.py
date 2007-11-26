@@ -5,12 +5,20 @@
 # X.org server. XRandR allows to configure resolution, refresh rate, rotation 
 # of the screen and multiple outputs of graphics cards.
 #
-# In many aspects it follows the design of the xrand tool written by
-# Keith Packard
-#
 # Copyright 2007 © Sebastian Heinlein <sebastian.heinlein@web.de>
 # Copyright 2007 © Michael Vogt <mvo@ubuntu.com>
 # Copyright 2007 © Canonical Ltd.
+#
+# In many aspects it follows the design of the xrand tool of the X.org, which
+# comes with the following copyright:
+#
+# Copyright © 2001 Keith Packard, member of The XFree86 Project, Inc.
+# Copyright © 2002 Hewlett Packard Company, Inc.
+# Copyright © 2006 Intel Corporation
+#
+# And can be downloaded here:
+#
+# git://anongit.freedesktop.org/git/xorg/app/xrandr
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
