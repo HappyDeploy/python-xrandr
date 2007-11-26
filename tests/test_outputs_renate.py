@@ -50,7 +50,7 @@ if __name__ == "__main__":
     new_res_y = 768
     fb_width_mm = screen.get_output_by_name("VGA").get_physical_width() + screen.get_output_by_name("LVDS").get_physical_width()
     fb_height_mm = min(screen.get_output_by_name("VGA").get_physical_height(),screen.get_output_by_name("LVDS").get_physical_height())
-    screen.set_screen_size(new_res_x, new_res_y, fb_width_mm, fb_height_mm)
+    screen.set_size(new_res_x, new_res_y, fb_width_mm, fb_height_mm)
     new_output_x = new_res_x/2
     new_output_y = 0
     # normalize so that top-left is (0,0) (see xrandr.c:set_position)

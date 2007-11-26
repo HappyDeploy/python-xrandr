@@ -839,18 +839,18 @@ def _check_required_version(version):
 def get_mode_height(mode, rotation):
     """Return the height of the given mode taking the rotation into account"""
     if rotation & (RR_ROTATE_0 | RR_ROTATE_180):
-        return mode.contents.width
+        return mode.height
     elif rotation & (RR_ROTATE_90 | RR_ROTATE_270):
-        return mode.contents.height
+        return mode.width
     else:
         return 0
 
 def get_mode_width(mode, rotation):
     """Return the width of the given mode taking the rotation into account"""
     if rotation & (RR_ROTATE_0 | RR_ROTATE_180):
-        return mode.contents.height
+        return mode.width
     elif rotation & (RR_ROTATE_90 | RR_ROTATE_270):
-        return mode.contents.width
+        return mode.height
     else:
         return 0
 
