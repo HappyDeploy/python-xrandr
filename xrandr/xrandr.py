@@ -198,6 +198,7 @@ class Output:
         self._crtc = None
         self._rotation = RR_ROTATE_0
         self._relation = None
+        self._relation_offset = 0
         self._relative_to = None
         self._position = None
         self._reflection = None
@@ -288,21 +289,24 @@ class Output:
             clones.append(o)
         return clones
 
-    def set_relation(self, relative, relation):
+    def set_relation(self, relative, relation, offset=0):
         rel = self._screen.get_output_by_name(relative)
         if rel and relation in (RELATION_LEFT_OF, RELATION_RIGHT_OF, 
                                 RELATION_ABOVE, RELATION_BELOW, 
                                 RELATION_SAME_AS):
             self._relation = relation
             self._relative_to = rel
+            self._relation_offset = offset
             self._changes = self._changes | CHANGES_RELATION
         else:
             raise RRError("The given relative output or relation is not "
                           "available")
 
-    def has_changed(self, changes):
-        return self._changes & changes
-
+    def has_changed(self, changes=None):
+        if changes:
+            return self._changes & changes
+        else:
+            return self._changes != CHANGES_NONE
 
 class Crtc:
     """The crtc is a reference to a hardware pipe that is provided by the
@@ -407,7 +411,6 @@ class Screen:
 
         self._display = dpy
         if not -1 <= screen < xlib.XScreenCount(dpy):
-            #FIXME: fail in a nicer way
             raise RRError("The chosen screen is not available", screen)
         elif screen == -1:
             self._screen = xlib.XDefaultScreen(dpy)
@@ -490,6 +493,7 @@ class Screen:
             crtc = self.get_crtc_by_xid(output.get_crtc())
             if crtc:
                 output._mode = crtc._info.contents.mode
+                output._crtc = crtc
 
     def get_size(self):
         """Returns the current pixel and physical size of the screen"""
@@ -605,6 +609,14 @@ class Screen:
             raise RRError("The chosen refresh rate %s is not "
                           "supported" % rate)
 
+    def get_mode_by_xid(self, xid):
+        """Returns the mode of the given xid"""
+        screen_modes = self._resources.contents.modes
+        for s in range(self._resources.contents.nmode):
+            if screen_modes[s].id == xid:
+                return screen_modes[s]
+        return None
+
     def get_output_by_name(self, name):
         """Returns the output of the screen with the given name or None"""
         if self.outputs.has_key(name):
@@ -699,6 +711,13 @@ class Screen:
         self._calculate_size()
         self.set_size(self._width, self._height,
                       self._width_mm, self._height_mm)
+        #FIXME: missing assigning of crtcs
+        for output in self.get_outputs():
+            if output.has_changed() and output._mode:
+                output._crtc.set_config(output._x, output._y, 
+                                        self.get_mode_by_xid(output._mode), 
+                                        [output])
+
 
     def apply_config(self):
         """Used for instantly applying RandR 1.0 changes"""
@@ -718,30 +737,31 @@ class Screen:
             if not output.has_changed(CHANGES_RELATION) or \
                output._mode == None: continue
             relative = output._relative_to
+            mode = self.get_mode_by_xid(output._mode)
+            mode_relative = self.get_mode_by_xid(relative._mode)
             if not relative or not relative._mode:
                 output._x = 0
                 output._y = 0
                 output._changes = output._changes | CHANGES_POSITION
-            if output._relation == RELATION_LEFTOF:
-                output._y = relative._y
-                output._x = relative._x - get_mode_width(output._mode,
+            if output._relation == RELATION_LEFT_OF:
+                output._y = relative._y + output._relation_offset
+                output._x = relative._x - \
+                            get_mode_width(mode, output._rotation)
+            elif output._relation == RELATION_RIGHT_OF:
+                output._y = relative._y + output._relation_offset
+                output._x = relative._x + get_mode_width(mode_relative,
                                                          output._rotation)
-            elif output._relation == RELATION_RIGHTOF:
-                output._y = relative._y
-                output._x = relative._x + get_mode_width(output._mode,
-                                                          output._rotation)
             elif output._relation == RELATION_ABOVE:
-                output._y = relative._y - get_mode_height(output._mode,
+                output._y = relative._y - get_mode_height(mode,
                                                           output._rotation)
-                output._x = relative._x
-
+                output._x = relative._x + output._relation_offset
             elif output._relation == RELATION_BELOW:
-                output._y = relative._x + get_mode_height(output._mode,
+                output._y = relative._y + get_mode_height(mode_relative,
                                                           output._rotation)
-                output._y = relative._y
-            elif output._relation == RELATION_SAMEAS:
-                output._x = relative._x
-                output._y = relative._y
+                output._x = relative._x + output._relation_offset
+            elif output._relation == RELATION_SAME_AS:
+                output._y = relative._y + output._relation_offset
+                output._x = relative._x + output._relation_offset
             output._changes = output._changes | CHANGES_POSITION
         # Normalize the postions so to the upper left cornor of all outputs 
         # is at 0,0
@@ -752,19 +772,23 @@ class Screen:
             if output._x < min_x: min_x = output._x
             if output._y < min_y: min_y = output._y
         for output in self.get_outputs():
+            if output._mode == None: continue
             output._x -= min_x
             output._y -= min_y
             output._changes = output._changes | CHANGES_POSITION
 
     def _calculate_size(self):
+        """Recalculate the pixel and physical size of the screen so that
+           it covers all outputs"""
         width = self._width
         height = self._height
         for output in self.get_outputs():
             if not output._mode: continue
+            mode = self.get_mode_by_xid(output._mode)
             x = output._x
             y = output._y
-            w = get_mode_width(output._mode, output._rotation)
-            h = get_mode_height(output._mode, output._rotation)
+            w = get_mode_width(mode, output._rotation)
+            h = get_mode_height(mode, output._rotation)
             if x + w > width: width = x + w
             if y + h > height: height = y + h
         if width > self._width_max or height > self._height_max:

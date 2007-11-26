@@ -76,7 +76,28 @@ def main():
                       default=None,
                       action="store", type="string", dest="output_left",
                       #TRANSLATORS: command line option
-                      help=_("move the output left to the given one"))
+                      help=_("move the output left of the given one"))
+    parser.add_option("--right-of", "",
+                      default=None,
+                      action="store", type="string", dest="output_right",
+                      #TRANSLATORS: command line option
+                      help=_("move the output right of the given one"))
+    parser.add_option("--above", "",
+                      default=None,
+                      action="store", type="string", dest="output_above",
+                      #TRANSLATORS: command line option
+                      help=_("move the output above of the given one"))
+    parser.add_option("--below", "",
+                      default=None,
+                      action="store", type="string", dest="output_below",
+                      #TRANSLATORS: command line option
+                      help=_("move the output below of the given one"))
+    parser.add_option("--same-as", "",
+                      default=None,
+                      action="store", type="string", dest="output_same",
+                      #TRANSLATORS: command line option
+                      help=_("move the output to the position of the "
+                             "given one"))
     (options, args) = parser.parse_args()
 
     if xrandr.has_extension():
@@ -120,6 +141,14 @@ def main():
             output.disable()
         elif options.output_left:
             output.set_relation(options.output_left, xrandr.RELATION_LEFT_OF)
+        elif options.output_right:
+            output.set_relation(options.output_right, xrandr.RELATION_RIGHT_OF)
+        elif options.output_above:
+            output.set_relation(options.output_above, xrandr.RELATION_ABOVE)
+        elif options.output_below:
+            output.set_relation(options.output_below, xrandr.RELATION_BELOW)
+        elif options.output_same:
+            output.set_relation(options.output_same, xrandr.RELATION_SAME_AS)
         screen.apply_output_config()
     else:
         screen.print_info(options.verbose)
