@@ -324,6 +324,10 @@ class Crtc:
         self._info = info
         self.xid = xid
         self._screen = screen
+        self._outputs = []
+        self._changed = False
+        self._x = 0
+        self._y = 0
     def __del__(self):
         """Free the reference to the hardware pipe if the instance gets 
            removed"""
@@ -335,7 +339,7 @@ class Crtc:
         """Returns a binary flag that contains the supported rotations of the
            hardware pipe"""
         return self._info.contents.rotations
-    def set_config(self, x, y, mode, outputs):
+    def set_config(self, x, y, mode, outputs, rotation=RR_ROTATE_0):
         """Configure the hardware pipe with the given mode and outputs. X and y
            set the position of the crtc output in the screen"""
         rr.XRRSetCrtcConfig(self._screen._display,
@@ -343,16 +347,27 @@ class Crtc:
                             self.xid,
                             self._screen.get_timestamp(),
                             c_int(x), c_int(y),
-                            mode.id,
-                            RR_ROTATE_0,
+                            mode,
+                            rotation,
                             _array_conv(outputs, RROutput, lambda x: x.id),
                             len(outputs))
+    def apply_changes(self):
+        """Appy the stored changes"""
+        if len(self._outputs) > 0:
+            output = self._outputs[0]
+            self.set_config(output._x, output._y, output._mode, 
+                            self._outputs, output._rotation)
+        else:
+            self.disable()
     def disable(self):
-        rr.XRRSetCrtcConfig(self._screen._display,
+         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
                             self.xid,
                             self._screen.get_timestamp(),
-                            0, 0, 0, RR_ROTATE_0, 0, 0)
+                            0, 0,
+                            None,
+                            RR_ROTATE_0,
+                            0, 0)
     def get_gamma_size(self):
         return rr.XRRGetCrtcGammaSize(self._screen._display, self.id)
     def get_gamma(self):
@@ -362,15 +377,27 @@ class Crtc:
         g = _to_gamma(gamma)
         rr.XRRSetCrtcGamma(self._screen._display, self.id, g)
         rr.XRRFreeGamma(g)
-    gamma = property(get_gamma, set_gamma)
-    @property
-    def outputs(self):
+        gamma = property(get_gamma, set_gamma)
+
+    def load_outputs(self):
+        """Get the currently assigned outputs"""
         outputs = []
         for i in range(self._info.contents.noutput):
             id = self._info.contents.outputs[i]
             o = self._screen.get_output_by_id(id)
             outputs.append(o)
-        return outputs
+        self._outputs = outputs
+
+    def get_outputs(self):
+        return self._outputs
+
+    def add_output(self, output):
+        if len(self._outputs) == 0:
+            self._x = output._x
+            self._y = output._y
+            self._rotation = output._rotation
+            self._mode = output._mode
+        self._outputs.append(output)
 
     def supports_output(self, output):
         """Check if the output can be used by the crtc. 
@@ -400,6 +427,18 @@ class Crtc:
         reflect = rotation & (RR_REFLECT_X|RR_REFLECT_Y)
         if (((rotations & dir) != 0) and ((rotations & reflect) == reflect)):
             return True
+        return False
+
+    def has_changed(self):
+        """Check if there are any new outputs assigned to the crtc or any
+           outputs with a changed mode or position"""
+        if len(self._outputs) != self._info.contents.noutput:
+            return True
+        for i in range(self._info.contents.noutput):
+            id = self._info.contents.outputs[i]
+            output = self._screen.get_output_by_id(id) 
+            if not output in self._outputs: return True
+            if output.has_changed(): return True
         return False
 
 class Screen:
@@ -502,6 +541,7 @@ class Screen:
             if crtc:
                 output._mode = crtc._info.contents.mode
                 output._crtc = crtc
+                crtc.add_output(output)
 
     def get_size(self):
         """Returns the current pixel and physical size of the screen"""
@@ -719,13 +759,10 @@ class Screen:
         self._calculate_size()
         self.set_size(self._width, self._height,
                       self._width_mm, self._height_mm)
-        #FIXME: missing assigning of crtcs
-        for output in self.get_outputs():
-            if output.has_changed() and output._mode:
-                output._crtc.set_config(output._x, output._y, 
-                                        self.get_mode_by_xid(output._mode), 
-                                        [output])
-
+        #FIXME: Missing assignment of outputs to crtcs
+        for crtc in self.crtcs:
+            if crtc.has_changed(): 
+                crtc.apply_changes()
 
     def apply_config(self):
         """Used for instantly applying RandR 1.0 changes"""
