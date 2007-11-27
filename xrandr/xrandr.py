@@ -87,8 +87,8 @@ Rotation = c_ushort
 Status = c_int
 
 # load the libs
-xlib = cdll.LoadLibrary("libX11.so")
-rr = cdll.LoadLibrary("libXrandr.so")
+xlib = cdll.LoadLibrary("libX11.so.6")
+rr = cdll.LoadLibrary("libXrandr.so.2")
 
 # query resources
 class _XRRModeInfo(Structure):
