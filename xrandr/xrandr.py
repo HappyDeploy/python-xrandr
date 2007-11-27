@@ -297,6 +297,13 @@ class Output:
         #FIXME: Check for other outputs that are connected on the same crtc
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
+    def set_to_mode(self, mode):
+        modes = self.get_available_modes()
+        if mode in range(len(modes)):
+            self._mode = modes[mode].id
+            return
+        raise RRError("Mode is not available")
+
     def set_to_preferred_mode(self):
         modes = self.get_available_modes()
         mode = modes[self.get_preferred_mode()]

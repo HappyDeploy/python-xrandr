@@ -72,6 +72,10 @@ def main():
                       action="store_true", dest="output_preferred",
                       #TRANSLATORS: command line option
                       help=_("choose the preferred resolution and rate"))
+    parser.add_option("--mode", "",
+                      action="store", type="int", dest="output_mode",
+                      #TRANSLATORS: command line option
+                      help=_("set to the mode of the given index number"))
     parser.add_option("--off", "",
                       action="store_true", dest="output_disable",
                       #TRANSLATORS: command line option
@@ -145,6 +149,8 @@ def main():
             output.disable()
         elif options.output_preferred:
             output.set_to_preferred_mode()
+        elif options.output_mode != None:
+            output.set_to_mode(options.output_mode)
         if options.output_left:
             output.set_relation(options.output_left, xrandr.RELATION_LEFT_OF)
         elif options.output_right:
