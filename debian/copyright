@@ -34,3 +34,5 @@ Public License can be found in `/usr/share/common-licenses/LGPL'.
 
 The Debian packaging is (C) 2007, Sebastian Heinlein <glatzor@ubuntu.com> and
 is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
+
+The files debian/pyxrandr.1x is (C) 2001 Keith Packard.
