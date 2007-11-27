@@ -292,10 +292,11 @@ class Output:
 
     def disable(self):
         """Disables the output"""
-        if not self.is_active():
-            return False
-        #FIXME: Check for other outputs that are connected on the same crtc
-        self._screen.get_crtc_by_xid(self.get_crtc()).disable()
+        if not self.is_active(): return
+        self._mode = None
+        self._crtc._outputs.remove(self)
+        self._crtc = None
+        self._changes = self._changes | CHANGES_CRTC | CHANGES_MODE
 
     def set_to_mode(self, mode):
         modes = self.get_available_modes()
