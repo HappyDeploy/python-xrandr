@@ -72,10 +72,10 @@ def main():
                       action="store_true", dest="output_preferred",
                       #TRANSLATORS: command line option
                       help=_("choose the preferred resolution and rate"))
-    parser.add_option("--disable", "",
+    parser.add_option("--off", "",
                       action="store_true", dest="output_disable",
                       #TRANSLATORS: command line option
-                      help=_("disable the selected output"))
+                      help=_("turn off the selected output"))
     parser.add_option("--left-of", "",
                       default=None,
                       action="store", type="string", dest="output_left",
