@@ -307,7 +307,7 @@ class Output:
     def set_to_preferred_mode(self):
         modes = self.get_available_modes()
         mode = modes[self.get_preferred_mode()]
-        if mode:
+        if mode != None:
             self._mode = mode.id
             return
         raise RRError("Preferred mode is not available")
