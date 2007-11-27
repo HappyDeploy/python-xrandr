@@ -72,11 +72,11 @@ CHANGES_REFRESH = 128
 CHANGES_PROPERTY = 256
 
 # Relation information
-(RELATION_ABOVE,
- RELATION_BELOW,
- RELATION_RIGHT_OF,
- RELATION_LEFT_OF,
- RELATION_SAME_AS) = range(5)
+RELATION_ABOVE = 0
+RELATION_BELOW = 1
+RELATION_RIGHT_OF = 2
+RELATION_LEFT_OF = 3
+RELATION_SAME_AS = 4
 
 # some fundamental datatypes 
 RRCrtc = c_long
@@ -282,6 +282,13 @@ class Output:
         """Returns True if the output is attached to a hardware pipe, is
            enabled"""
         return self._info.contents.crtc != 0
+
+    def is_connected(self):
+        """Return True if a device is detected at the output"""
+        if self._info.contents.connection in (RR_CONNECTED,
+                                              RR_UNKOWN_CONNECTION):
+            return True
+        return False
 
     def disable(self):
         """Disables the output"""
@@ -728,21 +735,24 @@ class Screen:
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
-            print "  %s (%s mm x %s mm)" % (o,
-                                            output.get_physical_width(),
-                                            output.get_physical_height())
-            if output.is_active():
+            print "  %s"  % o,
+            if output.is_connected():
+                print "(%smm x %smm)" % (output.get_physical_width(),
+                                         output.get_physical_height())
                 modes = output.get_available_modes()
                 print "    Modes:"
                 for m in range(len(modes)):
                     mode = modes[m]
-                    if m == output.get_preferred_mode():
-                        preferred = " (preferred)"
-                    else: 
-                        preferred = ""
                     refresh = mode.dotClock / (mode.hTotal * mode.vTotal)
-                    print "      %s x %s @ %s%s" % (mode.width, mode.height, 
-                                                    refresh, preferred)
+                    print "      [%s] %s x %s @ %s" % (m,
+                                                       mode.width,
+                                                       mode.height,
+                                                       refresh),
+                    if mode.id == output._mode:
+                        print "*",
+                    if m == output.get_preferred_mode():
+                        print "(preferred)",
+                    print ""
                 print "    Rotations:",
                 rots = output.get_available_rotations()
                 if rots & RR_ROTATE_0: print "normal",
@@ -750,12 +760,13 @@ class Screen:
                 if rots & RR_ROTATE_180: print "inverted",
                 if rots & RR_ROTATE_270: print "left",
                 print ""
-                if verbose:
-                    print "    Core properties:"
-                    for (f,t) in output._info.contents._fields_:
-                        print "      %s: %s" % (f,
-                                               getattr(output._info.contents, 
-                                                       f))
+            else: 
+                print "(not connected)"
+            if verbose:
+                print "    Core properties:"
+                for (f,t) in output._info.contents._fields_:
+                    print "      %s: %s" % (f,
+                                            getattr(output._info.contents, f))
 
     def get_outputs(self):
         """Returns the outputs of the screen"""
