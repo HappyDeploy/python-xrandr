@@ -1,5 +1,5 @@
 Source: python-xrandr
-Section: unknown
+Section: x11
 Priority: extra
 Maintainer: Sebastian Heinlein <glatzor@ubuntu.com>
 Build-Depends: cdbs, 
