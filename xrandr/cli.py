@@ -32,6 +32,7 @@
 from gettext import gettext as _
 import gettext
 gettext.textdomain("python-xrandr")
+import sys
 
 from optparse import OptionParser
 
@@ -41,7 +42,12 @@ __version__ = "0.0.x(development)"
 
 def main():
     parser = OptionParser(version=__version__)
-    parser.add_option("--verbose", "-v",
+    parser.add_option("-v", "",
+                      action="store_true", dest="version",
+                      default=False,
+                      #TRANSLATORS: command line option
+                      help=_("show current xrandr version"))
+    parser.add_option("--verbose", "",
                       action="store_true", dest="verbose",
                       default=False,
                       #TRANSLATORS: command line option
@@ -109,7 +115,11 @@ def main():
     (options, args) = parser.parse_args()
 
     if xrandr.has_extension():
-        print _("XRandR %s.%s") % xrandr.XRANDR_VERSION
+        if options.version:
+            print "%x.%s" % xrandr.XRANDR_VERSION
+            sys.exit()
+        else:
+            print _("XRandR %s.%s") % xrandr.XRANDR_VERSION
     else:
         print _("The XRandR extension is not available")
         sys.exit(1)
