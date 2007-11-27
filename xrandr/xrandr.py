@@ -289,6 +289,14 @@ class Output:
             return False
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
+    def set_to_preferred_mode(self):
+        modes = self.get_available_modes()
+        mode = modes[self.get_preferred_mode()]
+        if mode:
+            self._mode = mode.id
+            return
+        raise RRError("Preferred mode is not available")
+
     def get_clones(self):
         clones = []
         for i in range(self._info.contents.nclone):
@@ -386,30 +394,32 @@ class Crtc:
         self._outputs = outputs
 
     def get_outputs(self):
+        """Returns the list of attached outputs"""
         return self._outputs
 
     def add_output(self, output):
+        """Adds the specified output to the crtc"""
+        output._crtc = self
         self._outputs.append(output)
 
     def supports_output(self, output):
         """Check if the output can be used by the crtc. 
            See check_crtc_for_output in xrandr.c"""
-        if not self.xid in output.get_crtcs():
+        if not self.xid in map(lambda c: c.xid, output.get_crtcs()):
             return False
-        for other in screen.outputs.values():
-            if other.id == output.id:
-                continue
-            if other.get_crtc() == self.xid:
-                return False
-            # Check if the output can be clones to the other outputs on 
-            # the same crtc
-            if not other in output.clones:
-                return False
-            # Compare the state of the crtc and the output
-            # FIXME
-            #for a in ["mode", "x", "y", "rotation"]:
-             #   if getattr(self._info).contents != getattr(output._info).contents:
-             #       return False
+        if len(self._outputs):
+            for other in self._outputs:
+                if other == output: continue
+                if other._x != output._x: return False
+                if other._y != output._y: return False
+                if other._mode != output._mode: return False
+                if other._rotation != output._rotation: return False
+        #FIXME: pick_crtc is still missing
+        elif self._info.contents.noutput > 0:
+            if self._info.contents.x != output._x: return False
+            if self._info.contents.y != output._y: return False
+            if self._info.contents.mode_info != output._mode: return False
+            if self._info.rotation != output._rotation: return False
         return True
 
     def supports_rotation(self, rotation):
@@ -532,7 +542,6 @@ class Screen:
             crtc = self.get_crtc_by_xid(output.get_crtc())
             if crtc:
                 output._mode = crtc._info.contents.mode
-                output._crtc = crtc
                 crtc.add_output(output)
 
     def get_size(self):
@@ -751,7 +760,20 @@ class Screen:
         self._calculate_size()
         self.set_size(self._width, self._height,
                       self._width_mm, self._height_mm)
-        #FIXME: Missing assignment of outputs to crtcs
+
+        # Assign all active outputs to crtcs
+        for output in self.outputs.values():
+            if not output._mode or output._crtc: continue
+            for crtc in output.get_crtcs():
+                if crtc and crtc.supports_output(output):
+                    crtc.add_output(output)
+                    output._changes = output._changes | CHANGES_CRTC
+                    break
+            if not output._crtc:
+                #FIXME: Take a look at the pick_crtc code in xrandr.c
+                raise RRError("There is no matching crtc for the output")
+
+        # Apply stored changes of crtcs
         for crtc in self.crtcs:
             if crtc.has_changed(): 
                 crtc.apply_changes()
