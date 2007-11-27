@@ -1,5 +1,5 @@
-python-xrandr (0.0.1) gutsy; urgency=low
+python-xrandr (0.1) gutsy; urgency=low
 
   * Initial Release.
 
- -- Sebastian Heinlein <glatzor@ubuntu.com>  Tue, 27 Nov 2007 09:29:27 +0100
+ -- Sebastian Heinlein <glatzor@ubuntu.com>  Tue, 27 Nov 2007 09:39:08 +0100
