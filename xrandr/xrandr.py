@@ -390,14 +390,7 @@ class Crtc:
 
     def disable(self):
         """Turns off all outputs on the crtc"""
-        rr.XRRSetCrtcConfig(self._screen._display,
-                            self._screen._resources,
-                            self.xid,
-                            self._screen.get_timestamp(),
-                            0, 0,
-                            None,
-                            RR_ROTATE_0,
-                            0, 0)
+        self.set_config(0, 0, None, [])
 
     #FIXME: support gamma settings
     """
@@ -878,8 +871,8 @@ class Screen:
     def _calculate_size(self):
         """Recalculate the pixel and physical size of the screen so that
            it covers all outputs"""
-        width = self._width
-        height = self._height
+        width = 1
+        height = 1
         for output in self.get_outputs():
             if not output._mode: continue
             mode = self.get_mode_by_xid(output._mode)

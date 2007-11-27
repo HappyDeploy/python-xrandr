@@ -2,8 +2,9 @@ python-xrandr (0.1.1) gutsy; urgency=low
 
   * Fix a crash if the -dev packages are not installed. Thanks Alberto for
     reporting
+  * Fix a too large screen size after disabling an output.
 
- -- Sebastian Heinlein <glatzor@ubuntu.com>  Tue, 27 Nov 2007 16:24:17 +0100
+ -- Sebastian Heinlein <glatzor@ubuntu.com>  Tue, 27 Nov 2007 16:45:55 +0100
 
 python-xrandr (0.1) gutsy; urgency=low
 
