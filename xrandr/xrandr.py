@@ -287,9 +287,11 @@ class Output:
         """Disables the output"""
         if not self.is_active():
             return False
+        #FIXME: Check for other outputs that are connected on the same crtc
         self._screen.get_crtc_by_xid(self.get_crtc()).disable()
 
     def get_clones(self):
+        """Returns the xids of the outputs which can be clones of the output"""
         clones = []
         for i in range(self._info.contents.nclone):
             id = self._info.contents.clones[i]
@@ -298,6 +300,7 @@ class Output:
         return clones
 
     def set_relation(self, relative, relation, offset=0):
+        """Sets the position of the output in relation to the given one"""
         rel = self._screen.get_output_by_name(relative)
         if rel and relation in (RELATION_LEFT_OF, RELATION_RIGHT_OF, 
                                 RELATION_ABOVE, RELATION_BELOW, 
@@ -311,6 +314,8 @@ class Output:
                           "available")
 
     def has_changed(self, changes=None):
+        """Checks if the output has changed: Either for a specific change or
+           generally"""
         if changes:
             return self._changes & changes
         else:
@@ -325,19 +330,23 @@ class Crtc:
         self.xid = xid
         self._screen = screen
         self._outputs = []
+
     def __del__(self):
-        """Free the reference to the hardware pipe if the instance gets 
+        """Frees the reference to the rendering pipe if the instance gets 
            removed"""
         rr.XRRFreeCrtcConfigInfo(self._info)
+
     def get_xid(self):
         """Returns the internal id of the crtc from the X server"""
         return self.xid
+
     def get_available_rotations(self):
         """Returns a binary flag that contains the supported rotations of the
            hardware pipe"""
         return self._info.contents.rotations
+
     def set_config(self, x, y, mode, outputs, rotation=RR_ROTATE_0):
-        """Configure the hardware pipe with the given mode and outputs. X and y
+        """Configures the render pipe with the given mode and outputs. X and y
            set the position of the crtc output in the screen"""
         rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
@@ -348,16 +357,19 @@ class Crtc:
                             rotation,
                             _array_conv(outputs, RROutput, lambda x: x.id),
                             len(outputs))
+
     def apply_changes(self):
-        """Appy the stored changes"""
+        """Applies the stored changes"""
         if len(self._outputs) > 0:
             output = self._outputs[0]
             self.set_config(output._x, output._y, output._mode, 
                             self._outputs, output._rotation)
         else:
             self.disable()
+
     def disable(self):
-         rr.XRRSetCrtcConfig(self._screen._display,
+        """Turns off all outputs on the crtc"""
+        rr.XRRSetCrtcConfig(self._screen._display,
                             self._screen._resources,
                             self.xid,
                             self._screen.get_timestamp(),
@@ -365,6 +377,9 @@ class Crtc:
                             None,
                             RR_ROTATE_0,
                             0, 0)
+
+    #FIXME: support gamma settings
+    """
     def get_gamma_size(self):
         return rr.XRRGetCrtcGammaSize(self._screen._display, self.id)
     def get_gamma(self):
@@ -374,7 +389,7 @@ class Crtc:
         g = _to_gamma(gamma)
         rr.XRRSetCrtcGamma(self._screen._display, self.id, g)
         rr.XRRFreeGamma(g)
-        gamma = property(get_gamma, set_gamma)
+        gamma = property(get_gamma, set_gamma)"""
 
     def load_outputs(self):
         """Get the currently assigned outputs"""
@@ -674,8 +689,13 @@ class Screen:
     def print_info(self, verbose=False):
         """Prints some information about the detected screen and its outputs"""
         _check_required_version((1,0))
-        print "Screen %s: minimum %s x %s, current %s x %s, maximum %s x %s" % (self._screen, self._width_min, self._height_min, self._width, self._height, self._width_max, self._height_max)
-        print "          %s mm x %s mm" % (self._width_mm, self._height_mm)
+        print "Screen %s: minimum %s x %s, current %s x %s, maximum %s x %s" %\
+              (self._screen,
+               self._width_min, self._height_min,
+               self._width, self._height,
+               self._width_max, self._height_max)
+        print "          %smm x %smm" % (self._width_mm, self._height_mm)
+        print "Crtcs: %s" % len(self.crtcs)
         if verbose:
             print "Modes (%s):" % self._resources.contents.nmode
             modes = self._resources.contents.modes
@@ -684,17 +704,18 @@ class Screen:
                                        modes[i].width,
                                        modes[i].height)
         i = 0
-        print "Sizes:"
+        print "Sizes @ Refresh Rates:"
         for s in self.get_available_sizes():
             print "  [%s] %s x %s @ %s" % (i, s.width, s.height,
                                            self.get_available_rates_for_size_index(i))
             i += 1
-        print "Rotations:"
+        print "Rotations:",
         rots = self.get_available_rotations()
-        if rots & RR_ROTATE_0: print "  normal"
-        if rots & RR_ROTATE_90: print "  right"
-        if rots & RR_ROTATE_180: print "  inverted"
-        if rots & RR_ROTATE_270: print "  left"
+        if rots & RR_ROTATE_0: print "normal",
+        if rots & RR_ROTATE_90: print "right",
+        if rots & RR_ROTATE_180: print "inverted",
+        if rots & RR_ROTATE_270: print "left",
+        print ""
         print "Outputs:"
         for o in self.outputs.keys():
             output = self.outputs[o]
@@ -713,12 +734,13 @@ class Screen:
                     refresh = mode.dotClock / (mode.hTotal * mode.vTotal)
                     print "      %s x %s @ %s%s" % (mode.width, mode.height, 
                                                     refresh, preferred)
-                print "    Rotations:"
+                print "    Rotations:",
                 rots = output.get_available_rotations()
-                if rots & RR_ROTATE_0: print "      normal"
-                if rots & RR_ROTATE_90: print "      right"
-                if rots & RR_ROTATE_180: print "      inverted"
-                if rots & RR_ROTATE_270: print "      left"
+                if rots & RR_ROTATE_0: print "normal",
+                if rots & RR_ROTATE_90: print "right",
+                if rots & RR_ROTATE_180: print "inverted",
+                if rots & RR_ROTATE_270: print "left",
+                print ""
                 if verbose:
                     print "    Core properties:"
                     for (f,t) in output._info.contents._fields_:
