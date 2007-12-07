@@ -679,6 +679,14 @@ class Screen:
             raise RRError("The chosen refresh rate %s is not "
                           "supported" % rate)
 
+    def get_mode_by_name(self, name):
+        """Returns the mode of the given name"""
+        screen_modes = self._resources.contents.modes
+        for s in range(self._resources.contents.nmode):
+            if screen_modes[s].name == name:
+                return screen_modes[s]
+        return None
+
     def get_mode_by_xid(self, xid):
         """Returns the mode of the given xid"""
         screen_modes = self._resources.contents.modes
