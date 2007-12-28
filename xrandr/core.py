@@ -233,6 +233,42 @@ class Output:
                     modes.append(screen_modes[s])
         return modes
 
+    def get_available_resolutions(self, reverse=False):
+        """Return a list of available resolution pairs"""
+        res = set()
+        for mode in self.get_available_modes():
+            res.add((mode.width, mode.height))
+        ls = list(res)
+        ls.sort(reverse=reverse)
+        return  ls
+
+    def get_available_rates_for_resolution(self, width, height, reverse=False):
+        """Return a list of rates that are available for the given
+           resolution"""
+        rates = set()
+        for mode in self.get_available_modes():
+            if mode.width == width and mode.height == height:
+                rates.add(mode.dotClock / (mode.hTotal * mode.vTotal))
+        ls = list(rates)
+        ls.sort(reverse=reverse)
+        return ls
+
+    def get_current_rate(self):
+        """Return a tuple with the current height and width"""
+        if self.is_active():
+            mode = self._screen.get_mode_by_xid(self._mode)
+            return mode.dotClock / (mode.hTotal * mode.vTotal)
+        else:
+            return None
+
+    def get_current_resolution(self):
+        """Return a tuple with the height and width of the current resolution"""
+        if self.is_active():
+            mode = self._screen.get_mode_by_xid(self._mode)
+            return (mode.width, mode.height)
+        else:
+            return (None, None)
+
     def get_preferred_mode(self):
         """Returns an index that refers to the list of available modes and 
            points to the preferred mode of the connected device"""
@@ -251,7 +287,7 @@ class Output:
         return False
 
     def disable(self):
-        """Disables the output"""
+        """Disable the output"""
         if not self.is_active(): return
         self._mode = None
         self._crtc._outputs.remove(self)
@@ -259,6 +295,7 @@ class Output:
         self._changes = self._changes | xrandr.CHANGES_CRTC | xrandr.CHANGES_MODE
 
     def set_to_mode(self, mode):
+        """Change the output to the given mode"""
         modes = self.get_available_modes()
         if mode in range(len(modes)):
             self._mode = modes[mode].id
@@ -266,6 +303,7 @@ class Output:
         raise RRError("Mode is not available")
 
     def set_to_preferred_mode(self):
+        """Set the output to its preferred mode"""
         modes = self.get_available_modes()
         mode = modes[self.get_preferred_mode()]
         if mode != None:
@@ -274,7 +312,7 @@ class Output:
         raise RRError("Preferred mode is not available")
 
     def get_clones(self):
-        """Returns the xids of the outputs which can be clones of the output"""
+        """Return the xids of the outputs which can be clones of the output"""
         clones = []
         for i in range(self._info.contents.nclone):
             id = self._info.contents.clones[i]
@@ -283,7 +321,7 @@ class Output:
         return clones
 
     def set_relation(self, relative, relation, offset=0):
-        """Sets the position of the output in relation to the given one"""
+        """Set the position of the output in relation to the given one"""
         rel = self._screen.get_output_by_name(relative)
         if rel and relation in (xrandr.RELATION_LEFT_OF,
                                 xrandr.RELATION_RIGHT_OF,
